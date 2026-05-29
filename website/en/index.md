@@ -5,25 +5,13 @@ hero:
   name: Stock SDK
   text: Stock Market SDK for Browser and Node.js
   tagline: Zero dependencies, Lightweight distribution, and a single API for quotes, K-line, indicators, futures, options, and AI / MCP workflows
-  image:
-    src: /logo.svg
-    alt: Stock SDK
   actions:
     - theme: brand
       text: Get Started
       link: /en/guide/getting-started
     - theme: alt
-      text: API Docs
-      link: /en/api
-    - theme: alt
-      text: AI / MCP
-      link: /en/mcp/
-    - theme: alt
       text: Playground
       link: /en/playground/
-    - theme: alt
-      text: GitHub
-      link: https://github.com/chengzuopeng/stock-sdk
 
 features:
   - icon:

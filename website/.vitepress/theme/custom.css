@@ -1,5 +1,24 @@
 /* Stock SDK - 高级主题定制与特效 */
 
+/* ===== 0. 字体系统 ===== */
+/*
+ * 设计方向："金融终端感 + 工程克制"。
+ * - Latin / 标题：Sora（几何、现代、有 fintech 气质，替换 VitePress 默认的 Inter）
+ * - 数字 / 代码 / 版本 / ticker：JetBrains Mono（工程信号，承担"数据"的字符个性）
+ * - 中文：系统 PingFang / HarmonyOS（Sora 无 CJK 字形会自动回退，保持中文清爽）
+ * Google Fonts 加载失败时回退到系统栈，不影响可用性。
+ */
+:root {
+  --vp-font-family-base: 'Sora', -apple-system, BlinkMacSystemFont, 'PingFang SC',
+    'HarmonyOS Sans SC', 'Microsoft YaHei', 'Segoe UI', Roboto, sans-serif;
+  --vp-font-family-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Menlo',
+    'Consolas', 'Liberation Mono', monospace;
+  /* display 别名：用于 hero / 标题，区别于 body */
+  --font-display: 'Sora', -apple-system, BlinkMacSystemFont, 'PingFang SC',
+    'HarmonyOS Sans SC', sans-serif;
+  --font-mono: var(--vp-font-family-mono);
+}
+
 /* ===== 1. 基础变量与配色 ===== */
 :root {
   /* 品牌色 - 珊瑚红系列 */
@@ -11,9 +30,22 @@
   /* 特效颜色 */
   --glow-color: rgba(248, 113, 113, 0.3);
   --accent-gradient: linear-gradient(135deg, #f87171 0%, #fb923c 100%);
-  
+
+  /* 行情涨跌色：中国习惯「红涨绿跌」，与品牌珊瑚红天然契合 */
+  --quote-up: #f43f5e;
+  --quote-down: #10b981;
+  --quote-flat: #94a3b8;
+
   /* 背景网格 */
   --bg-grid: rgba(0, 0, 0, 0.03);
+
+  /* 终端卡片（LiveTicker）配色 —— 浅色主题下也是深色面板，制造 Bloomberg 终端反差 */
+  --term-bg: #0b0f17;
+  --term-bg-2: #0e1320;
+  --term-border: rgba(248, 113, 113, 0.22);
+  --term-grid: rgba(255, 255, 255, 0.035);
+  --term-text: #e6edf3;
+  --term-text-dim: #7d8aa0;
 }
 
 .dark {
@@ -22,6 +54,13 @@
   --vp-c-brand-3: #ef4444;
   --glow-color: rgba(248, 113, 113, 0.15);
   --bg-grid: rgba(255, 255, 255, 0.02);
+
+  --quote-up: #fb7185;
+  --quote-down: #34d399;
+
+  --term-bg: #090d14;
+  --term-bg-2: #0c111c;
+  --term-border: rgba(252, 165, 165, 0.18);
 }
 
 /* ===== 2. 全局动态背景 ===== */
@@ -140,62 +179,127 @@ body:has(.VPHome) .VPNavBarSearchButton {
   background-color: var(--vp-c-bg-soft) !important;
 }
 
-/* ===== 4. Feature 卡片玻璃拟态与 3D 效果 ===== */
+/* ===== 4. Feature 卡片：按类别分色 + 序号 + 克制的 2D 抬升 ===== */
+/*
+ * 旧版 7 张卡片图标同色（橙红方块），分类感丢失，且 rotateX/Y 3D 翻转
+ * 在严肃的开发文档里偏过头。改为：
+ *  - 每张卡片一个语义化 accent（--card-accent），图标 tile 与 hover 边框跟随
+ *  - 右上角 mono 序号（01..07，CSS counter 自动生成）作为"规格表"细节
+ *  - hover 仅做轻微上浮 + accent 边框，去掉 3D 旋转
+ */
+.VPFeatures .items {
+  counter-reset: feat;
+}
+
 .VPFeature {
+  --card-accent: var(--vp-c-brand-2);
+  position: relative;
+  counter-increment: feat;
   background: rgba(var(--vp-c-bg-soft-rgb), 0.6) !important;
   backdrop-filter: blur(12px);
   border: 1px solid var(--vp-c-divider);
-  border-radius: 20px !important;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
-  perspective: 1000px;
+  border-radius: 18px !important;
+  overflow: hidden;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.25s ease, border-color 0.25s ease !important;
+}
+
+/* 顶部 2px accent 条，hover 时点亮 */
+.VPFeature::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--card-accent);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+/* 右上角 mono 序号 */
+.VPFeature::before {
+  content: counter(feat, decimal-leading-zero);
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--vp-c-text-3);
+  opacity: 0.45;
+  transition: color 0.25s ease, opacity 0.25s ease;
 }
 
 .VPFeature:hover {
-  transform: translateY(-10px) rotateX(5deg) rotateY(5deg) !important;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-  border-color: var(--vp-c-brand-1) !important;
+  transform: translateY(-4px) !important;
+  box-shadow: 0 12px 28px -8px color-mix(in srgb, var(--card-accent) 38%, transparent);
+  border-color: color-mix(in srgb, var(--card-accent) 55%, var(--vp-c-divider)) !important;
 }
 
-.dark .VPFeature:hover {
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+.VPFeature:hover::after {
+  opacity: 1;
+}
+
+.VPFeature:hover::before {
+  color: var(--card-accent);
+  opacity: 1;
 }
 
 .VPFeature .icon {
-  background: var(--vp-c-brand-soft);
-  width: 54px;
-  height: 54px;
+  background: color-mix(in srgb, var(--card-accent) 14%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--card-accent) 22%, transparent);
+  width: 50px;
+  height: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
-  margin-bottom: 20px;
-  transition: transform 0.3s;
+  border-radius: 13px;
+  margin-bottom: 18px;
+  transition: transform 0.25s ease, background 0.25s ease;
 }
 
 .VPFeature:hover .icon {
-  transform: scale(1.1) rotate(10deg);
+  transform: scale(1.06);
+  background: color-mix(in srgb, var(--card-accent) 20%, transparent) !important;
 }
 
-/* ===== 5. 内容区域动效 ===== */
+.VPFeature .title {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* 7 张卡片的语义化配色（顺序对应首页 features 数组） */
+.VPFeatures .items .item:nth-child(1) .VPFeature { --card-accent: #64748b; } /* 零依赖 — 中性 */
+.VPFeatures .items .item:nth-child(2) .VPFeature { --card-accent: #3b82f6; } /* 多市场 — 蓝 */
+.VPFeatures .items .item:nth-child(3) .VPFeature { --card-accent: #10b981; } /* 行情到分析 — 绿 */
+.VPFeatures .items .item:nth-child(4) .VPFeature { --card-accent: #f59e0b; } /* 指标 — 橙 */
+.VPFeatures .items .item:nth-child(5) .VPFeature { --card-accent: #8b5cf6; } /* AI/MCP — 紫 */
+.VPFeatures .items .item:nth-child(6) .VPFeature { --card-accent: #ef4444; } /* 请求治理 — 红 */
+.VPFeatures .items .item:nth-child(7) .VPFeature { --card-accent: #3178c6; } /* TypeScript — TS 蓝 */
+
+/* ===== 5. 内容区域：标题 marker ===== */
+/*
+ * 旧版 h2 底部 4px 短下划线在长标题旁几乎看不见。
+ * 改为标题左侧一根品牌渐变竖条 marker —— 始终可见、对齐清晰、更有"章节"分量，
+ * 同时保留 VitePress 默认的全宽顶部分隔线。
+ */
 .vp-doc h2 {
   position: relative;
-  display: inline-block;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.vp-doc h2::after {
+.vp-doc h2::before {
   content: '';
-  position: absolute;
-  bottom: -4px;
-  left: 0;
-  width: 40px;
-  height: 4px;
+  flex-shrink: 0;
+  width: 4px;
+  height: 1.05em;
   background: var(--accent-gradient);
-  border-radius: 2px;
-  transition: width 0.3s;
-}
-
-.vp-doc h2:hover::after {
-  width: 100%;
+  border-radius: 3px;
+  box-shadow: 0 0 12px -2px var(--glow-color);
 }
 
 /* h2 标题中的链接：去掉下划线，保持加粗 */
@@ -291,4 +395,316 @@ body:has(.VPHome) .VPNavBarSearchButton {
 .VPNavBarAppearance,
 .VPNavBarSocialLinks {
   display: flex !important;
+}
+
+/* ============================================================
+ * 7. 字体落地：display 字体应用到标题 / 品牌 / hero
+ * ============================================================ */
+.VPNavBarTitle .title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.VPHero .name,
+.VPHero .text {
+  font-family: var(--font-display);
+}
+.VPHero .text {
+  letter-spacing: -0.02em;
+}
+
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.vp-doc h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+}
+
+/* ============================================================
+ * 8. Hero 右侧：用 LiveTicker 终端卡片替换浮动 logo
+ *    - 关掉 container 的 float 漂浮（终端不应晃动）
+ *    - 保留一团降低透明度的品牌光晕作为氛围
+ *    - 容器改为自适应宽度、自动高度，承载非正方形的 ticker
+ * ============================================================ */
+.VPHero .image-container {
+  animation: none !important;
+  width: 100%;
+  max-width: 460px;
+  height: auto;
+  transform: none;
+}
+@media (min-width: 960px) {
+  .VPHero .image-container {
+    transform: translateX(-10px);
+  }
+}
+.VPHero .image-bg {
+  opacity: 0.26;
+  filter: blur(96px);
+}
+.dark .VPHero .image-bg {
+  opacity: 0.34;
+}
+
+/* ============================================================
+ * 9. Hero metadata 徽章行（HeroMeta.vue）
+ * ============================================================ */
+.hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin: 4px 0 26px;
+}
+.hero-meta__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--vp-c-text-2);
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: border-color 0.2s, color 0.2s, transform 0.2s;
+}
+.hero-meta__item:hover {
+  color: var(--vp-c-text-1);
+  border-color: var(--vp-c-brand-1);
+  transform: translateY(-1px);
+}
+.hero-meta__item--version {
+  color: var(--vp-c-brand-2);
+  border-color: color-mix(in srgb, var(--vp-c-brand-1) 45%, var(--vp-c-divider));
+  background: var(--vp-c-brand-soft);
+}
+.hero-meta__num {
+  font-weight: 700;
+  color: var(--vp-c-text-1);
+}
+.hero-meta__icon {
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+/* 居中：首页 hero 在 <960px 时整体居中，徽章行也跟随 */
+@media (max-width: 959px) {
+  .hero-meta {
+    justify-content: center;
+  }
+}
+
+/* ============================================================
+ * 10. Hero 次级 inline 链接（主按钮下方）
+ * ============================================================ */
+.hero-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  margin-top: 22px;
+}
+.hero-links a {
+  position: relative;
+  display: inline-block;
+  /* 关键：整条链接不换行，避免「AI / MCP 接入」被拆成多行 */
+  white-space: nowrap;
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--vp-c-text-2);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+/*
+ * 下划线用绝对定位 + scaleX 动画，完全脱离文档流，
+ * 不再作为 flex 兄弟元素撑开容器导致 hover 时文字折行错乱。
+ */
+.hero-links a::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 1.5px;
+  border-radius: 2px;
+  background: var(--vp-c-brand-1);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s ease;
+}
+.hero-links a:hover {
+  color: var(--vp-c-brand-1);
+}
+.hero-links a:hover::after {
+  transform: scaleX(1);
+}
+.hero-links .sep {
+  width: 1px;
+  height: 12px;
+  background: var(--vp-c-divider);
+}
+@media (max-width: 959px) {
+  .hero-links {
+    justify-content: center;
+  }
+  .hero-links .sep {
+    display: none;
+  }
+}
+
+/* ============================================================
+ * 11. 表格列宽塌缩修复
+ *    VitePress 默认 table 为 display:block + overflow-x:auto，
+ *    会让"说明"列被挤成每个汉字一行的竖排。改为 display:table +
+ *    width:100% 让浏览器正常分配列宽。对 2/3 列表格同样安全。
+ * ============================================================ */
+.vp-doc table {
+  display: table;
+  width: 100%;
+  table-layout: auto;
+  margin: 18px 0;
+}
+.vp-doc th,
+.vp-doc td {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.vp-doc th:first-child,
+.vp-doc td:first-child {
+  white-space: nowrap;
+}
+.vp-doc thead th {
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  background: var(--vp-c-bg-soft);
+}
+.vp-doc td code {
+  font-size: 0.84em;
+}
+
+/* ============================================================
+ * 12. 代码块：顶部 accent 渐变条 + 复制按钮常显
+ * ============================================================ */
+.vp-doc div[class*='language-'] {
+  border-radius: 12px;
+  border: 1px solid var(--vp-c-divider);
+}
+.vp-doc div[class*='language-']::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent-gradient);
+  opacity: 0.9;
+  z-index: 2;
+  pointer-events: none;
+}
+/* 复制按钮：从 hover 才显现 → 常态半透明，hover 实心 */
+.vp-doc [class*='language-'] > button.copy {
+  opacity: 0.55;
+}
+.vp-doc [class*='language-']:hover > button.copy,
+.vp-doc [class*='language-'] > button.copy:focus,
+.vp-doc [class*='language-'] > button.copy:hover {
+  opacity: 1;
+}
+/* 语言标签用 mono，稍微下移给顶部 accent 条让位 */
+.vp-doc [class*='language-'] > span.lang {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+}
+/* 行号再淡一点，降低噪音 */
+.vp-doc [class*='language-'] .line-numbers-wrapper {
+  color: var(--vp-c-text-3);
+  opacity: 0.55;
+}
+
+/* ============================================================
+ * 13. Changelog 版本时间线
+ *    给 changelog.md 加 frontmatter `pageClass: changelog-page` 后生效。
+ *    复用全局 h2 的 flex 布局，把左侧渐变竖条替换为时间线圆点。
+ * ============================================================ */
+.changelog-page .vp-doc h2 {
+  border-top: 1px solid var(--vp-c-divider);
+  margin-top: 44px;
+  padding-top: 26px;
+}
+.changelog-page .vp-doc h2::before {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--vp-c-bg);
+  border: 3px solid var(--vp-c-brand-2);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--vp-c-brand-1) 12%, transparent),
+    0 0 16px -2px var(--glow-color);
+}
+/* 版本号本身用 mono，强化"发布记录"观感 */
+.changelog-page .vp-doc h2 {
+  font-family: var(--font-mono);
+  font-size: 1.45rem;
+  letter-spacing: -0.01em;
+}
+
+/* ============================================================
+ * 14. 降级与无障碍：尊重 prefers-reduced-motion
+ * ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .VPHero .name,
+  .VPHero .image-bg,
+  .VPHero, .VPFeatures, .vp-doc,
+  .VPFeature {
+    animation: none !important;
+  }
+}
+
+/* ============================================================
+ * 15. 导航栏：滚动后磨砂玻璃，替代割裂的纯白
+ *    VitePress 机制：
+ *      .VPNavBar.home.top        → 首页顶部，完全透明（保留）
+ *      .VPNavBar:not(.home.top)  → 滚动态 / 文档页，原本填 --vp-nav-bg-color(纯白)
+ *    改法：把导航底色降为半透明，并加 backdrop-filter，让背后的暖色渐变背景
+ *    透上来形成磨砂玻璃，与整体配色协调；首页顶部仍保持透明不变。
+ * ============================================================ */
+:root {
+  --vp-nav-bg-color: color-mix(in srgb, var(--vp-c-bg) 55%, transparent);
+}
+.dark {
+  --vp-nav-bg-color: color-mix(in srgb, var(--vp-c-bg) 48%, transparent);
+}
+
+/*
+ * 统一让「整条导航栏」作为单一磨砂玻璃面（全宽），无论首页滚动还是文档页：
+ *  - 强制 bar 承载半透明底色 + blur
+ *  - 清掉 content-body 的重复底色，避免双层叠加出现色块
+ */
+.VPNavBar:not(.home.top) {
+  background-color: var(--vp-nav-bg-color) !important;
+  /* 透明度更高，靠更强的 blur 维持文字可读性 */
+  backdrop-filter: blur(18px) saturate(185%);
+  -webkit-backdrop-filter: blur(18px) saturate(185%);
+  box-shadow: 0 4px 24px -16px rgba(15, 23, 42, 0.4);
+  transition: background-color 0.25s ease, box-shadow 0.25s ease;
+}
+.VPNavBar:not(.home.top) .content-body {
+  background-color: transparent !important;
+}
+/* 底部分隔线换成暖调细线，不再是生硬的灰线 */
+.VPNavBar:not(.home.top) .divider-line {
+  background-color: color-mix(in srgb, var(--vp-c-brand-1) 20%, var(--vp-c-divider)) !important;
+}
+
+/* 玻璃态导航上，搜索框不再强制纯白（否则在磨砂上像个突兀的白块） */
+body:has(.VPHome) .VPNavBar:not(.home.top) .VPNavBarSearch .DocSearch-Button,
+body:has(.VPHome) .VPNavBar:not(.home.top) .VPNavBarSearchButton {
+  background-color: color-mix(in srgb, var(--vp-c-bg) 42%, transparent) !important;
 }

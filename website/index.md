@@ -5,25 +5,13 @@ hero:
   name: Stock SDK
   text: 面向浏览器与 Node.js 的股票行情 SDK
   tagline: 零依赖、轻量发布包，覆盖 A 股 / 港股 / 美股 / 基金 / 期货 / 期权、K 线、技术指标与 AI / MCP 接入
-  image:
-    src: /logo.svg
-    alt: Stock SDK
   actions:
     - theme: brand
       text: 快速开始
       link: /guide/getting-started
     - theme: alt
-      text: API 文档
-      link: /api
-    - theme: alt
-      text: AI / MCP 接入
-      link: /mcp/
-    - theme: alt
       text: 在线体验
       link: /playground/
-    - theme: alt
-      text: GitHub
-      link: https://github.com/chengzuopeng/stock-sdk
 
 features:
   - icon:

@@ -1,3 +1,7 @@
+---
+pageClass: changelog-page
+---
+
 # 更新日志
 
 本页面记录 Stock SDK 的版本更新历史。

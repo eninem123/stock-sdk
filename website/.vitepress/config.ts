@@ -1,8 +1,16 @@
 import { defineConfig } from 'vitepress'
 import { resolve } from 'path'
+import { readFileSync } from 'fs'
 import faroUploader from '@grafana/faro-rollup-plugin'
 
 const base = process.env.DOCS_BASE || '/'
+
+// 构建期读取真实版本号，注入 themeConfig 供 HeroMeta 等组件使用（避免硬编码失真）
+const sdkVersion = (
+  JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf-8')) as {
+    version: string
+  }
+).version
 
 // MCP 中文侧边栏配置
 const zhMcpSidebar = {
@@ -308,7 +316,18 @@ export default defineConfig({
 
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo.svg` }],
-    ['meta', { name: 'theme-color', content: '#3eaf7c' }],
+    // 字体：Sora（标题/品牌 display）+ JetBrains Mono（数字/代码/版本）。
+    // display=swap，加载失败时回退到系统字体栈，不阻塞渲染。
+    ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
+    ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
+    [
+      'link',
+      {
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap',
+      },
+    ],
+    ['meta', { name: 'theme-color', content: '#f87171' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:site_name', content: 'Stock SDK' }],
     [
@@ -422,6 +441,9 @@ export default defineConfig({
 
   themeConfig: {
     logo: '/logo.svg',
+
+    // 自定义字段：当前 SDK 版本，HeroMeta 组件通过 useData().theme.sdkVersion 读取
+    sdkVersion,
 
     socialLinks: [
       { icon: 'github', link: 'https://github.com/chengzuopeng/stock-sdk' },

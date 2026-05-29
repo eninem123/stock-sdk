@@ -1,3 +1,7 @@
+---
+pageClass: changelog-page
+---
+
 # Changelog
 
 This page records the version update history of Stock SDK.
