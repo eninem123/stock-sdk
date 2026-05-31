@@ -14,10 +14,14 @@
 - A 股 / 港股 / 美股 / 公募基金实时行情
 - A 股 / 港股 / 美股历史 K 线、分钟 K 线、当日分时
 - 行业板块、概念板块数据
-- 资金流向、盘口大单、交易日历、股票搜索
-- 分红数据
-- 期货数据
-- 期权数据
+- 资金流向（个股 / 大盘 / 排名 / 板块深度）、盘口大单
+- 沪深港通 / 北向资金（分时 / 汇总 / 持股排行 / 历史）
+- 涨停跌停股池（含连板数）、盘口异动、板块异动
+- 龙虎榜（详情 / 个股统计 / 机构 / 营业部 / 席位明细）
+- 大宗交易、融资融券
+- 公募基金扩展（分红 / 历史净值 / 实时估值 / 同类排名）
+- 交易日历、市场开休市状态、股票搜索、分红数据
+- 期货数据、期权数据
 - 技术指标计算
 - MCP 文档与 AI 集成支持
 
@@ -49,29 +53,53 @@ src/
 ├── core/                    # 核心基础设施
 │   ├── constants.ts         # 常量定义
 │   ├── parser.ts            # 响应解析
-│   ├── request.ts           # 请求客户端与 provider policy
+│   ├── request.ts           # 请求客户端 RequestClient
+│   ├── providerPolicy.ts    # provider 级请求策略(超时/重试/限流/熔断/headers)
 │   ├── cache.ts             # 缓存
 │   ├── rateLimiter.ts       # 限流
 │   ├── circuitBreaker.ts    # 熔断
-│   ├── jsonp.ts             # JSONP 请求
+│   ├── fallback.ts          # 多源 / 降级回退
+│   ├── errors.ts            # 统一错误类型
+│   ├── jsonp.ts             # JSONP 请求(动态 callback)
+│   ├── jsVars.ts            # 浏览器 <script> 注入 + Node 抓取 JS 变量(双端)
+│   ├── scriptMutex.ts       # <script> 注入并发互斥
+│   ├── time.ts              # 市场时区时间解析 / 格式化
 │   ├── userAgentPool.ts     # UA 池
 │   └── utils.ts             # decodeGBK、chunkArray、asyncPool 等
-├── indicators/              # 技术指标
-│   ├── addIndicators.ts
-│   ├── ma.ts / macd.ts / boll.ts / kdj.ts / rsi.ts / wr.ts
-│   ├── bias.ts / cci.ts / atr.ts / obv.ts / roc.ts / dmi.ts
-│   ├── sar.ts / kc.ts
+├── indicators/              # 技术指标(独立计算函数)
+│   ├── ma/macd/boll/kdj/rsi/wr/bias/cci/atr/obv/roc/dmi/sar/kc.ts
+│   ├── addIndicators.ts     # 批量聚合
 │   ├── types.ts
 │   └── index.ts
-├── providers/               # 数据源适配层
+├── providers/               # 数据源适配层(只负责"取数 + 解析")
 │   ├── index.ts             # 聚合导出 tencent / eastmoney / sina
 │   ├── tencent/             # 行情、批量、搜索、交易日历、资金流
-│   ├── eastmoney/           # K 线、板块、分红、期货、部分期权
+│   ├── eastmoney/           # K线、板块、分红、期货/期权、基金扩展、龙虎榜、大宗、融资、北向、涨停异动
 │   └── sina/                # ETF / 股指 / 商品期权
-├── sdk.ts                   # StockSDK 门面类
-├── types.ts                 # 公共类型定义
+├── sdk/                     # 服务层:按领域拆分的 Service 类(构造注入 RequestClient)
+│   ├── baseService.ts       # service 基类
+│   ├── quoteService.ts      # 实时行情
+│   ├── klineService.ts      # K 线 / 分时(A / HK / US)
+│   ├── boardService.ts      # 行业 / 概念板块
+│   ├── indicatorService.ts  # 带指标 K 线(组合 kline + quote)
+│   ├── futuresService.ts    # 期货
+│   ├── optionsService.ts    # 期权
+│   ├── fundFlowService.ts   # 资金流向(深度)
+│   ├── northboundService.ts # 沪深港通 / 北向
+│   ├── marketEventService.ts# 涨停 / 盘口异动
+│   ├── dragonTigerService.ts# 龙虎榜
+│   ├── fundService.ts       # 公募基金扩展(分红/净值/估值/排名)
+│   ├── tradingCalendarService.ts # 交易日历 / 市场状态
+│   ├── dataService.ts       # 代码列表/批量/搜索/分红/大宗/融资融券
+│   └── index.ts             # 导出全部 service
+├── types/                   # 公共类型(按领域模块化)
+│   ├── quotes.ts / kline.ts / board.ts / fund.ts / fundFlow.ts
+│   ├── northbound.ts / dragonTiger.ts / marketEvent.ts / blockTrade.ts
+│   ├── margin.ts / futures.ts / options.ts / common.ts
+│   └── index.ts
+├── sdk.ts                   # StockSDK 门面类:持有各 Service 实例,薄委托统一对外
 ├── utils.ts                 # 对外暴露的工具封装
-└── index.ts                 # 统一导出入口
+└── index.ts                 # 统一导出入口(StockSDK、各 Service、类型、工具)
 
 test/
 ├── unit/                    # 单元测试
@@ -143,16 +171,17 @@ export async function getQuotes(codes: string[]): Promise<Quote[]> {
 
 ## 开发流程
 
-### 添加新的数据接口
+本项目是 **provider 取数 → service 业务编排 → 门面统一暴露** 的三层结构，新增接口按此顺序：
 
-1. 确认应落在哪个 provider 下：`tencent`、`eastmoney` 或 `sina`
-2. 在对应 provider 目录中新建或扩展模块
-3. 在 `src/types.ts` 中补充公共类型，必要时在 provider 内定义内部类型
-4. 在 `src/providers/index.ts` 或 provider 的 `index.ts` 中补充导出
-5. 在 `src/sdk.ts` 中添加门面方法
-6. 在 `src/index.ts` 中导出相关方法、类型或配置类型
-7. 根据变更补充测试、README 与 website 文档
-8. 完成后执行下方检查清单
+1. **provider 层**：确认数据源（`tencent` / `eastmoney` / `sina`），在对应目录新建或扩展模块。provider 只负责"发请求 + 解析"，复用 `RequestClient`，不要绕过重试 / 限流 / 熔断；在 provider 的 `index.ts` 补导出。
+2. **类型**：在 `src/types/` 下对应领域模块补充公共类型（行情进 `quotes.ts`、龙虎榜进 `dragonTiger.ts`…），并在 `src/types/index.ts` 导出。
+3. **service 层**：在 `src/sdk/` 选对应领域的 `xxxService.ts` 添加方法（找不到归属再新建 service 并在 `src/sdk/index.ts` 导出）。service 通过构造注入的 `RequestClient` 调用 provider。
+4. **门面**：在 `src/sdk.ts` 持有该 service 实例，并加一个**薄委托方法**（`return this.xxxService.foo(...)`）；**不要在门面里写业务逻辑**。
+5. **导出**：在 `src/index.ts` 导出新增的对外方法 / 类型 / 配置类型。
+6. 按下方清单补测试、README、website 中英文文档、Playground。
+7. 完成后执行下方检查清单。
+
+> 浏览器专用数据源（如基金扩展走天天基金 `<script>` 注入、无 CORS 头）：复用 `src/core/jsVars.ts` 的双端取数与 `src/core/scriptMutex.ts` 的注入互斥，**不要**自己写 `document.createElement('script')`。
 
 ### 添加新的技术指标
 
@@ -169,12 +198,14 @@ export async function getQuotes(codes: string[]): Promise<Quote[]> {
 涉及以下模块时，需要特别关注兼容性和副作用：
 
 - `src/core/request.ts`
+- `src/core/providerPolicy.ts`
 - `src/core/cache.ts`
 - `src/core/rateLimiter.ts`
 - `src/core/circuitBreaker.ts`
+- `src/core/fallback.ts`
 - `src/core/jsonp.ts`
 
-这类修改通常会影响多个 provider，必须补充测试，并优先检查旧配置是否仍然兼容。
+这类修改通常会影响多个 provider 与全部 service，必须补充测试，并优先检查旧配置是否仍然兼容。
 
 ## ⚠️ 开发完成后必做检查清单
 
@@ -237,10 +268,13 @@ yarn build:docs
 
 ### 6. 更新 Playground（如适用）
 
-如果新增能力适合演示，需要更新：
+Playground 已组件化，**不再是手写 md**。新增方法演示：
 
-- `website/playground/index.md`
-- `website/en/playground/index.md`
+1. 在 `website/.vitepress/theme/components/playground/methods/<分类>.ts` 中按 `MethodSpec` 加一项，需含 `category`、`market`、`params`、`code`、`run`。
+2. 新分类要在同目录 `categories.ts` 注册（含图标 / 颜色），并确保被 `methods/index.ts` 聚合导入。
+3. 类型见 `types.ts`（`CategoryKey` / `MarketKey` / `MethodSpec`）。
+
+中英文 Playground 共用同一套组件，无需维护两份方法列表。
 
 ## 检查清单总结
 
@@ -296,7 +330,9 @@ yarn build:pages
 | `getHistoryKline(symbol, options)` | A 股历史 K 线 |
 | `getMinuteKline(symbol, options)` | A 股分钟 K 线 / 分时 |
 | `getHKHistoryKline(symbol, options)` | 港股历史 K 线 |
+| `getHKMinuteKline(symbol, options)` | 港股分钟 K 线 / 当日分时（v1.10.0+） |
 | `getUSHistoryKline(symbol, options)` | 美股历史 K 线 |
+| `getUSMinuteKline(symbol, options)` | 美股分钟 K 线 / 当日分时（v1.10.0+） |
 | `getTodayTimeline(code)` | A 股当日分时走势 |
 
 ### 技术指标
@@ -353,9 +389,10 @@ yarn build:pages
 
 | 方法 | 说明 |
 |------|------|
-| `getFundFlow(codes)` | 资金流向 |
+| `getFundFlow(codes)` | 资金流向（简版） |
 | `getPanelLargeOrder(codes)` | 盘口大单占比 |
 | `getTradingCalendar()` | A 股交易日历 |
+| `getMarketStatus(market)` | 市场开 / 休市状态 |
 | `search(keyword)` | 股票搜索 |
 | `getDividendDetail(symbol)` | 分红派送详情 |
 
@@ -386,6 +423,65 @@ yarn build:pages
 | `getCommodityOptionKline(symbol)` | 商品期权日 K 线 |
 | `getOptionLHB(symbol, date)` | 期权龙虎榜 |
 
+### 资金流向（深度）
+
+| 方法 | 说明 |
+|------|------|
+| `getIndividualFundFlow(symbol, options)` | 个股资金流历史（日 / 周 / 月） |
+| `getMarketFundFlow()` | 大盘资金流（上证 + 深证） |
+| `getFundFlowRank(options)` | 个股资金流排名（沪深北全市场） |
+| `getSectorFundFlowRank(options)` | 板块资金流排名（行业 / 概念 / 地域） |
+| `getSectorFundFlowHistory(symbol, options)` | 单个板块历史资金流 |
+
+### 沪深港通 / 北向资金
+
+| 方法 | 说明 |
+|------|------|
+| `getNorthboundMinute(direction)` | 北向 / 南向资金分时 |
+| `getNorthboundFlowSummary()` | 沪深港通资金流向汇总 |
+| `getNorthboundHoldingRank(options)` | 北向 / 沪股通 / 深股通持股排行 |
+| `getNorthboundHistory(direction, options)` | 北向 / 南向按日历史 |
+| `getNorthboundIndividual(symbol, options)` | 个股北向持仓历史 |
+
+### 涨停 / 盘口异动
+
+| 方法 | 说明 |
+|------|------|
+| `getZTPool(type, date?)` | 涨停 / 跌停 / 强势等股池（含连板数） |
+| `getStockChanges(type)` | 盘口异动（22 种类型） |
+| `getBoardChanges()` | 当日板块异动 |
+
+### 龙虎榜
+
+| 方法 | 说明 |
+|------|------|
+| `getDragonTigerDetail(options)` | 龙虎榜详情（按日期范围） |
+| `getDragonTigerStockStats(period)` | 个股上榜统计 |
+| `getDragonTigerInstitution(options)` | 机构买卖统计 |
+| `getDragonTigerBranchRank(period)` | 营业部排行 |
+| `getDragonTigerStockSeatDetail(symbol, date)` | 个股某日上榜席位明细 |
+
+### 大宗交易 / 融资融券
+
+| 方法 | 说明 |
+|------|------|
+| `getBlockTradeMarketStat()` | 大宗交易市场每日总览 |
+| `getBlockTradeDetail(options)` | 大宗交易明细（按日期范围） |
+| `getBlockTradeDailyStat(options)` | 大宗交易每日统计（按股票汇总） |
+| `getMarginAccountInfo()` | 融资融券账户统计 |
+| `getMarginTargetList(date?)` | 融资融券标的明细 |
+
+### 公募基金扩展（v1.10.0+）
+
+| 方法 | 说明 |
+|------|------|
+| `getFundDividendList(options)` | 基金 / ETF 分红明细 |
+| `getFundNavHistory(code)` | 基金历史净值（单位 + 累计） |
+| `getFundEstimate(code)` | 当日实时估值（T-1 净值 + 盘中估算） |
+| `getFundRankHistory(code)` | 同类排名走势 |
+
+> 完整方法签名与参数以 `src/sdk.ts` 门面、README 和 website API 文档为准；上表用于让 AI 快速把握能力边界，新增能力时请同步本表。
+
 ## Git 提交规范
 
 使用语义化提交信息：
@@ -409,4 +505,6 @@ yarn build:pages
 4. **中文支持**：涉及 GBK 编码时优先使用既有 `decodeGBK` 能力。
 5. **并发控制**：批量请求优先复用现有 `asyncPool` 与 provider 内并发控制逻辑。
 6. **请求治理**：优先复用 `RequestClient` 及其 provider policy，不要在 provider 内随意绕过重试、限流、熔断。
-7. **文档同步**：新增对外能力时，README、website 中文、website 英文需同步更新。
+7. **分层边界**：provider 只取数解析、service 编排业务、`sdk.ts` 门面只做薄委托；不要跨层（如在门面写业务、在 provider 调另一个 provider）。
+8. **浏览器专用数据源**：无 CORS 头的源（如天天基金）走 `<script>` 注入，统一复用 `core/jsVars.ts` + `core/scriptMutex.ts`，保证双端可用与注入并发安全。
+9. **文档同步**：新增对外能力时，README、website 中文、website 英文、Playground 需同步更新。
