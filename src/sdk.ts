@@ -21,7 +21,7 @@ import type {
   USHistoryKline,
   USMinuteKline,
   USMinuteTimeline,
-  HKUSHistoryKline,
+  AnyHistoryKline,
   IndustryBoard,
   IndustryBoardSpot,
   IndustryBoardConstituent,
@@ -154,6 +154,217 @@ export class StockSDK {
     this.dataService = new DataService(this.client);
     this.tradingCalendarService = new TradingCalendarService(this.quoteService);
     this.fundService = new FundService(this.client);
+  }
+
+  // ===== v2 命名空间 API（委托现有 service；旧扁平方法仍保留以兼容）=====
+
+  /** 实时行情 */
+  get quotes() {
+    const s = this.quoteService;
+    return {
+      cn: s.getFullQuotes.bind(s),
+      cnSimple: s.getSimpleQuotes.bind(s),
+      hk: s.getHKQuotes.bind(s),
+      us: s.getUSQuotes.bind(s),
+      fund: s.getFundQuotes.bind(s),
+      fundFlow: s.getFundFlow.bind(s),
+      largeOrder: s.getPanelLargeOrder.bind(s),
+      timeline: s.getTodayTimeline.bind(s),
+    };
+  }
+
+  /** 代码列表 */
+  get codes() {
+    const s = this.quoteService;
+    return {
+      cn: s.getAShareCodeList.bind(s),
+      us: s.getUSCodeList.bind(s),
+      hk: s.getHKCodeList.bind(s),
+      fund: s.getFundCodeList.bind(s),
+    };
+  }
+
+  /** 批量行情 */
+  get batch() {
+    const s = this.quoteService;
+    return {
+      cn: s.getAllAShareQuotes.bind(s),
+      hk: s.getAllHKShareQuotes.bind(s),
+      us: s.getAllUSShareQuotes.bind(s),
+      byCodes: s.getAllQuotesByCodes.bind(s),
+      raw: s.batchRaw.bind(s),
+    };
+  }
+
+  /** K 线 / 分时 */
+  get kline() {
+    const k = this.klineService;
+    const ind = this.indicatorService;
+    return {
+      cn: k.getHistoryKline.bind(k),
+      cnMinute: k.getMinuteKline.bind(k),
+      hk: k.getHKHistoryKline.bind(k),
+      hkMinute: k.getHKMinuteKline.bind(k),
+      us: k.getUSHistoryKline.bind(k),
+      usMinute: k.getUSMinuteKline.bind(k),
+      withIndicators: ind.getKlineWithIndicators.bind(ind),
+    };
+  }
+
+  /** 板块（行业 / 概念） */
+  get board() {
+    const b = this.boardService;
+    return {
+      industry: {
+        list: b.getIndustryList.bind(b),
+        spot: b.getIndustrySpot.bind(b),
+        constituents: b.getIndustryConstituents.bind(b),
+        kline: b.getIndustryKline.bind(b),
+        minuteKline: b.getIndustryMinuteKline.bind(b),
+      },
+      concept: {
+        list: b.getConceptList.bind(b),
+        spot: b.getConceptSpot.bind(b),
+        constituents: b.getConceptConstituents.bind(b),
+        kline: b.getConceptKline.bind(b),
+        minuteKline: b.getConceptMinuteKline.bind(b),
+      },
+    };
+  }
+
+  /** 期权 */
+  get options() {
+    const o = this.optionsService;
+    return {
+      index: {
+        spot: o.getIndexOptionSpot.bind(o),
+        kline: o.getIndexOptionKline.bind(o),
+      },
+      etf: {
+        months: o.getETFOptionMonths.bind(o),
+        expireDay: o.getETFOptionExpireDay.bind(o),
+        minute: o.getETFOptionMinute.bind(o),
+        dailyKline: o.getETFOptionDailyKline.bind(o),
+        fiveDayMinute: o.getETFOption5DayMinute.bind(o),
+      },
+      commodity: {
+        spot: o.getCommodityOptionSpot.bind(o),
+        kline: o.getCommodityOptionKline.bind(o),
+      },
+      cffex: {
+        quotes: o.getCFFEXOptionQuotes.bind(o),
+      },
+      lhb: o.getOptionLHB.bind(o),
+    };
+  }
+
+  /** 期货 */
+  get futures() {
+    const f = this.futuresService;
+    return {
+      kline: f.getFuturesKline.bind(f),
+      globalSpot: f.getGlobalFuturesSpot.bind(f),
+      globalKline: f.getGlobalFuturesKline.bind(f),
+      inventorySymbols: f.getFuturesInventorySymbols.bind(f),
+      inventory: f.getFuturesInventory.bind(f),
+      comexInventory: f.getComexInventory.bind(f),
+    };
+  }
+
+  /** 资金流向（深度） */
+  get fundFlow() {
+    const f = this.fundFlowService;
+    return {
+      individual: f.getIndividualFundFlow.bind(f),
+      market: f.getMarketFundFlow.bind(f),
+      rank: f.getFundFlowRank.bind(f),
+      sectorRank: f.getSectorFundFlowRank.bind(f),
+      sectorHistory: f.getSectorFundFlowHistory.bind(f),
+    };
+  }
+
+  /** 沪深港通 / 北向 */
+  get northbound() {
+    const n = this.northboundService;
+    return {
+      minute: n.getNorthboundMinute.bind(n),
+      summary: n.getNorthboundFlowSummary.bind(n),
+      holdingRank: n.getNorthboundHoldingRank.bind(n),
+      history: n.getNorthboundHistory.bind(n),
+      individual: n.getNorthboundIndividual.bind(n),
+    };
+  }
+
+  /** 涨停 / 盘口异动 */
+  get marketEvent() {
+    const m = this.marketEventService;
+    return {
+      ztPool: m.getZTPool.bind(m),
+      stockChanges: m.getStockChanges.bind(m),
+      boardChanges: m.getBoardChanges.bind(m),
+    };
+  }
+
+  /** 龙虎榜 */
+  get dragonTiger() {
+    const d = this.dragonTigerService;
+    return {
+      detail: d.getDragonTigerDetail.bind(d),
+      stockStats: d.getDragonTigerStockStats.bind(d),
+      institution: d.getDragonTigerInstitution.bind(d),
+      branchRank: d.getDragonTigerBranchRank.bind(d),
+      seatDetail: d.getDragonTigerStockSeatDetail.bind(d),
+    };
+  }
+
+  /** 大宗交易 */
+  get blockTrade() {
+    const d = this.dataService;
+    return {
+      marketStat: d.getBlockTradeMarketStat.bind(d),
+      detail: d.getBlockTradeDetail.bind(d),
+      dailyStat: d.getBlockTradeDailyStat.bind(d),
+    };
+  }
+
+  /** 融资融券 */
+  get margin() {
+    const d = this.dataService;
+    return {
+      accountInfo: d.getMarginAccountInfo.bind(d),
+      targetList: d.getMarginTargetList.bind(d),
+    };
+  }
+
+  /** 公募基金扩展 */
+  get fund() {
+    const f = this.fundService;
+    return {
+      dividendList: f.getFundDividendList.bind(f),
+      navHistory: f.getFundNavHistory.bind(f),
+      estimate: f.getFundEstimate.bind(f),
+      rankHistory: f.getFundRankHistory.bind(f),
+    };
+  }
+
+  /** 交易日历 / 市场状态 */
+  get calendar() {
+    const c = this.tradingCalendarService;
+    return {
+      isTradingDay: c.isTradingDay.bind(c),
+      nextTradingDay: c.nextTradingDay.bind(c),
+      prevTradingDay: c.prevTradingDay.bind(c),
+      marketStatus: c.getMarketStatus.bind(c),
+    };
+  }
+
+  /** 参考数据（分红 / 交易日历原始数组） */
+  get reference() {
+    const s = this.quoteService;
+    return {
+      dividendDetail: s.getDividendDetail.bind(s),
+      tradingCalendar: s.getTradingCalendar.bind(s),
+    };
   }
 
   /**
@@ -426,20 +637,20 @@ export class StockSDK {
 
   /**
    * 获取 A 股全量代码列表
-   * @param options 过滤选项；传 `boolean` 兼容旧版「是否包含交易所前缀」用法
+   * @param options 过滤选项（`market` 筛选 / `simple` 去交易所前缀）
    */
   getAShareCodeList(
-    options?: import('./providers/tencent/batch').GetAShareCodeListOptions | boolean
+    options?: import('./providers/tencent/batch').GetAShareCodeListOptions
   ): Promise<string[]> {
     return this.quoteService.getAShareCodeList(options);
   }
 
   /**
    * 获取美股全量代码列表
-   * @param options 过滤选项；传 `boolean` 兼容旧版「是否包含市场前缀」用法
+   * @param options 过滤选项（`market` 筛选 / `simple` 去市场前缀）
    */
   getUSCodeList(
-    options?: import('./providers/tencent/batch').GetUSCodeListOptions | boolean
+    options?: import('./providers/tencent/batch').GetUSCodeListOptions
   ): Promise<string[]> {
     return this.quoteService.getUSCodeList(options);
   }
@@ -759,7 +970,7 @@ export class StockSDK {
   getKlineWithIndicators(
     symbol: string,
     options: KlineWithIndicatorsOptions = {}
-  ): Promise<KlineWithIndicators<HistoryKline | HKUSHistoryKline>[]> {
+  ): Promise<KlineWithIndicators<AnyHistoryKline>[]> {
     return this.indicatorService.getKlineWithIndicators(symbol, options);
   }
 
