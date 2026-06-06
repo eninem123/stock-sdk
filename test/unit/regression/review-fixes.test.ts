@@ -7,6 +7,7 @@ import { MemoryCacheStore, cacheThrough } from '../../../src/cache';
 import {
   RequestClient,
   AbortedError,
+  HttpError,
   SdkError,
   getSdkErrorCode,
 } from '../../../src/core';
@@ -68,5 +69,30 @@ describe('#8 client signal 与 per-call signal 并存时 client 取消仍生效'
       .catch((e) => e);
     expect(err).toBeInstanceOf(AbortedError);
     expect(err.code).toBe('ABORTED');
+  });
+});
+
+describe('补f 修正:externalAborted 不再掩盖真实业务错误', () => {
+  it('client signal 已 abort 时，in-flight 请求的真实 HTTP 500 仍归 HttpError(不被掩盖成 ABORTED)', async () => {
+    // mock fetch 忽略 signal、返回 500，模拟「响应已到手后 client 才 abort」的竞态
+    const f: typeof fetch = vi.fn(
+      async () => new Response('server error', { status: 500 })
+    ) as unknown as typeof fetch;
+
+    const clientController = new AbortController();
+    clientController.abort(); // client 持久 aborted
+
+    const client = new RequestClient({
+      fetchImpl: f,
+      signal: clientController.signal,
+      retry: { maxRetries: 0 },
+    });
+
+    const err = await client.get('https://example.com/a').catch((e) => e);
+    // 修复前：externalAborted 判定过宽 → 误归 AbortedError，真实 500 丢失
+    // 修复后：error 非 abort 形状 → 保留 HttpError
+    expect(err).toBeInstanceOf(HttpError);
+    expect(getSdkErrorCode(err)).not.toBe('ABORTED');
+    expect(err.status).toBe(500);
   });
 });

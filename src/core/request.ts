@@ -76,6 +76,32 @@ export interface RequestHooks {
 const TIMEOUT_ABORT_REASON = Symbol('stock-sdk:timeout');
 
 /**
+ * 判断 error 是否「形似 abort」：标准 AbortError(DOMException 或 Error)，
+ * 或 undici 连接被 abort 时抛的 TypeError，其真因(error.cause)是 AbortError。
+ * 用于在外部 signal 已取消时，仅把「确实由取消导致」的 error 归为 ABORTED，
+ * 不误伤 try 块里主动抛出的 HttpError / SdkError(PARSE_ERROR 等)业务错误。
+ */
+function isAbortShapedError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return true;
+  }
+  if (error instanceof Error) {
+    if (error.name === 'AbortError') {
+      return true;
+    }
+    // undici：连接被 abort 时抛 TypeError: terminated，真正的中止原因挂在 cause 上
+    const cause = (error as { cause?: unknown }).cause;
+    if (
+      (cause instanceof Error || cause instanceof DOMException) &&
+      cause.name === 'AbortError'
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * 合并多个 AbortSignal：任一触发即 abort。
  * 优先用原生 `AbortSignal.any`（Node 18.17+/20.3+、现代浏览器）；
  * 缺失时（Node 18.0–18.16）退回手写联动，并在结束后清理监听防泄漏。
@@ -478,10 +504,11 @@ export class RequestClient {
           perCall.signal.reason !== TIMEOUT_ABORT_REASON) ||
         (this.clientSignal?.aborted &&
           this.clientSignal.reason !== TIMEOUT_ABORT_REASON);
-      // undici 在连接被 abort 时抛 TypeError: terminated(真因在 error.cause),
-      // 这里不再要求 error 必须是 AbortError:只要外部 signal 已取消即归 ABORTED,
-      // 避免「用户主动取消」漏成 NETWORK_ERROR 被反复重试。
-      if (externalAborted) {
+      // 仅当「外部 signal 已取消」且「error 形似 abort」才归 ABORTED：
+      // clientSignal.aborted 是持久状态，只看它会把该 client 后续真实的 HttpError /
+      // PARSE_ERROR 误掩盖成 AbortedError(丢失 status/cause、误导 fallback 与熔断器)。
+      // isAbortShapedError 同时兼容标准 AbortError 与 undici 的 TypeError: terminated(cause)。
+      if (externalAborted && isAbortShapedError(error)) {
         throw new AbortedError(
           'Request aborted by external signal',
           provider,
