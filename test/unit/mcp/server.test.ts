@@ -125,4 +125,36 @@ describe('mcp/server · dispatchMessage', () => {
     );
     expect(r?.error?.code).toBe(RPC_INVALID_PARAMS);
   });
+
+  it('#10 codes 传字符串(类型不符)→ INVALID_ARGUMENT(不泄漏 Error[UNKNOWN])', async () => {
+    const r = await dispatchMessage(
+      {
+        jsonrpc: '2.0',
+        id: 11,
+        method: 'tools/call',
+        params: { name: 'get_a_share_quotes', arguments: { codes: '600519' } },
+      },
+      makeCtx()
+    );
+    const result = r?.result as CallResult;
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('INVALID_ARGUMENT');
+  });
+
+  it('#10 缺必填参数 codes → INVALID_ARGUMENT', async () => {
+    const r = await dispatchMessage(
+      { jsonrpc: '2.0', id: 12, method: 'tools/call', params: { name: 'get_a_share_quotes', arguments: {} } },
+      makeCtx()
+    );
+    const result = r?.result as CallResult;
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('INVALID_ARGUMENT');
+  });
+
+  it('#11 serverInfo.version 走构建注入，不硬编码 2.0.0', async () => {
+    const r = await dispatchMessage({ jsonrpc: '2.0', id: 13, method: 'initialize', params: {} }, makeCtx());
+    const result = r?.result as InitResult;
+    expect(result.serverInfo.version).not.toBe('2.0.0');
+    expect(result.serverInfo.version).toBe('0.0.0-dev');
+  });
 });

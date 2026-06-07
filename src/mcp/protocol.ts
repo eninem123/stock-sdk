@@ -7,8 +7,14 @@
 export const SUPPORTED_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18'] as const;
 export const LATEST_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0];
 
-/** server 身份（version 在发布 v2.0.0 时与 package.json 对齐） */
-export const SERVER_INFO = { name: 'stock-sdk', version: '2.0.0' } as const;
+/** 版本号由 tsup `define` 在构建期注入(__STOCK_SDK_VERSION__，来自 package.json)；测试环境回退。 */
+declare const __STOCK_SDK_VERSION__: string | undefined;
+
+/** server 身份。version 与 CLI `--version` 统一走构建期注入，避免与 package.json 漂移。 */
+export const SERVER_INFO: { name: string; version: string } = {
+  name: 'stock-sdk',
+  version: typeof __STOCK_SDK_VERSION__ !== 'undefined' ? __STOCK_SDK_VERSION__ : '0.0.0-dev',
+};
 
 /** JSON-RPC 标准错误码 */
 export const RPC_PARSE_ERROR = -32700;

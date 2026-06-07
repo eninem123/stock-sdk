@@ -5,7 +5,7 @@
  * 分发逻辑抽成纯函数 `dispatchMessage`（可单测）；`startMcpServer` 负责 transport 绑定。
  */
 import { StockSDK } from '../sdk';
-import type { RequestClientOptions } from '../core';
+import { InvalidArgumentError, type RequestClientOptions } from '../core';
 import { createLineReader, writeMessage, logStderr } from './transport';
 import {
   negotiateProtocolVersion,
@@ -32,6 +32,40 @@ export interface DispatchContext {
 /** 普通对象判定（排除 null 与数组）—— JSON-RPC params/arguments 必须是对象 */
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/**
+ * 按 tool.inputSchema 校验 args：required 缺失 / 基本类型不符 → 返回错误消息(否则 null)。
+ * MCP server 此前完全不按 schema 校验 tools/call 入参,脏入参(如 codes 传字符串而非数组)会
+ * 越过 provider 空值守卫、抛出 `codes.join is not a function` 这类泄漏实现细节的 Error[UNKNOWN]。
+ */
+function validateArgs(
+  schema: ToolDef['inputSchema'],
+  args: Record<string, unknown>
+): string | null {
+  for (const key of schema.required ?? []) {
+    if (args[key] === undefined || args[key] === null) {
+      return `缺少必填参数 "${key}"`;
+    }
+  }
+  for (const [key, prop] of Object.entries(schema.properties)) {
+    const v = args[key];
+    if (v === undefined || v === null || !prop.type) continue;
+    const okType =
+      prop.type === 'array'
+        ? Array.isArray(v)
+        : prop.type === 'string'
+          ? typeof v === 'string'
+          : prop.type === 'number' || prop.type === 'integer'
+            ? typeof v === 'number'
+            : prop.type === 'boolean'
+              ? typeof v === 'boolean'
+              : prop.type === 'object'
+                ? typeof v === 'object' && !Array.isArray(v)
+                : true;
+    if (!okType) return `参数 "${key}" 类型应为 ${prop.type}`;
+  }
+  return null;
 }
 
 /**
@@ -100,6 +134,12 @@ export async function dispatchMessage(
         return err(RPC_INVALID_PARAMS, 'params.arguments must be an object');
       }
       const args = isObject(rawArgs) ? rawArgs : {};
+      const argError = validateArgs(tool.inputSchema, args);
+      if (argError) {
+        // 入参不合规 → 干净的 INVALID_ARGUMENT(isError result,LLM 可见可纠正),
+        // 而非让脏入参流进 SDK 抛出泄漏实现细节的 Error[UNKNOWN]。
+        return ok(toolErrorResult(new InvalidArgumentError(argError)));
+      }
       try {
         const out = await tool.invoke(ctx.sdk, args);
         return ok(toToolResult(out));
