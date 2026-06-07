@@ -181,3 +181,96 @@ describe('dispatch — argShape 实参组装', () => {
     expect(fn).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * 别名命令（自定义 invoke）此前绕过了 buildOptions→convert 的 enum/类型校验，
+ * 导致 `--period`/`--adjust` 等已声明 option 未经校验直透 SDK。
+ * 这里专门覆盖 ALIAS 路径（findCommand(['kline','600519']) 等），与上面只覆盖
+ * 命名空间 `kline cn` 形成对照。
+ */
+describe('dispatch — 别名 invoke 的 option 校验/归一', () => {
+  it('kline 600519 --period weekly 正常透传(基线)', async () => {
+    const fn = vi.fn().mockResolvedValue([]);
+    const sdk = { kline: { cn: fn } } as unknown as StockSDK;
+    const m = findCommand(['kline', '600519'])!;
+    await dispatch(sdk, m.spec, { positional: m.rest, options: { period: 'weekly' } });
+    expect(fn).toHaveBeenCalledWith('600519', expect.objectContaining({ period: 'weekly' }));
+  });
+
+  it('kline 600519 --period xyz 抛 CliUsageError（enum 校验不再被绕过）', () => {
+    const fn = vi.fn();
+    const sdk = { kline: { cn: fn } } as unknown as StockSDK;
+    const m = findCommand(['kline', '600519'])!;
+    expect(() =>
+      dispatch(sdk, m.spec, { positional: m.rest, options: { period: 'xyz' } })
+    ).toThrow(CliUsageError);
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('kline 600519 --adjust bogus 抛 CliUsageError', () => {
+    const fn = vi.fn();
+    const sdk = { kline: { cn: fn } } as unknown as StockSDK;
+    const m = findCommand(['kline', '600519'])!;
+    expect(() =>
+      dispatch(sdk, m.spec, { positional: m.rest, options: { adjust: 'bogus' } })
+    ).toThrow(CliUsageError);
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('kline 600519 --period daily --period weekly 取末值(不再透传数组)', async () => {
+    const fn = vi.fn().mockResolvedValue([]);
+    const sdk = { kline: { cn: fn } } as unknown as StockSDK;
+    const m = findCommand(['kline', '600519'])!;
+    await dispatch(sdk, m.spec, { positional: m.rest, options: { period: ['daily', 'weekly'] } });
+    expect(fn).toHaveBeenCalledWith('600519', expect.objectContaining({ period: 'weekly' }));
+    const [, opts] = fn.mock.calls[0] as [string, Record<string, unknown>];
+    expect(Array.isArray(opts.period)).toBe(false);
+  });
+
+  it('kline 600519 --adjust none → 空字符串（map 归一对别名同样生效）', async () => {
+    const fn = vi.fn().mockResolvedValue([]);
+    const sdk = { kline: { cn: fn } } as unknown as StockSDK;
+    const m = findCommand(['kline', '600519'])!;
+    await dispatch(sdk, m.spec, { positional: m.rest, options: { adjust: 'none' } });
+    expect(fn).toHaveBeenCalledWith('600519', expect.objectContaining({ adjust: '' }));
+  });
+
+  it('minute 600519 --period 7 抛 CliUsageError（分钟周期 enum）', () => {
+    const fn = vi.fn();
+    const sdk = { kline: { cnMinute: fn } } as unknown as StockSDK;
+    const m = findCommand(['minute', '600519'])!;
+    expect(() =>
+      dispatch(sdk, m.spec, { positional: m.rest, options: { period: '7' } })
+    ).toThrow(CliUsageError);
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('minute 600519 --period 5 正常透传', async () => {
+    const fn = vi.fn().mockResolvedValue([]);
+    const sdk = { kline: { cnMinute: fn } } as unknown as StockSDK;
+    const m = findCommand(['minute', '600519'])!;
+    await dispatch(sdk, m.spec, { positional: m.rest, options: { period: '5' } });
+    expect(fn).toHaveBeenCalledWith('600519', expect.objectContaining({ period: '5' }));
+  });
+
+  it('indicators 600519 --period xyz 抛 CliUsageError', () => {
+    const fn = vi.fn();
+    const sdk = { kline: { withIndicators: fn } } as unknown as StockSDK;
+    const m = findCommand(['indicators', '600519'])!;
+    expect(() =>
+      dispatch(sdk, m.spec, { positional: m.rest, options: { period: 'xyz' } })
+    ).toThrow(CliUsageError);
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('indicators 600519 --period weekly --ma 5,10 正常组装', async () => {
+    const fn = vi.fn().mockResolvedValue([]);
+    const sdk = { kline: { withIndicators: fn } } as unknown as StockSDK;
+    const m = findCommand(['indicators', '600519'])!;
+    await dispatch(sdk, m.spec, { positional: m.rest, options: { period: 'weekly', ma: '5,10' } });
+    expect(fn).toHaveBeenCalledWith(
+      '600519',
+      expect.objectContaining({ period: 'weekly', indicators: { ma: { periods: [5, 10] } } })
+    );
+  });
+});

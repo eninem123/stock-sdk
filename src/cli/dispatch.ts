@@ -139,6 +139,28 @@ function validatePositionalEnum(spec: CommandSpec, positional: string[]): void {
   }
 }
 
+/**
+ * 别名命令走自定义 invoke 会绕过 buildOptions→convert 的 enum/类型校验与归一，
+ * 分发前对「已声明的 options」按 flag 名统一过一遍 convert：
+ * - enum 非法值抛 CliUsageError（修复 `kline 600519 --period xyz` 不报错）；
+ * - 标量(enum/string/number)取末值，重复 flag 不再以数组透传给 SDK（修复 `--period daily --period weekly`）；
+ * - 类型转换 + map 归一，使 invoke 读取到的 `ctx.options.*` 与命名空间路径一致。
+ * 未声明的 flag 原样保留（如 indicators 的 wr/cci 等，由 invoke 自行处理）。
+ */
+function normalizeDeclaredOptions(
+  spec: CommandSpec,
+  rawOptions: Record<string, unknown>
+): Record<string, unknown> {
+  const declared = spec.options;
+  if (!declared || declared.length === 0) return rawOptions;
+  const out: Record<string, unknown> = { ...rawOptions };
+  for (const opt of declared) {
+    if (rawOptions[opt.flag] === undefined) continue;
+    out[opt.flag] = convert(opt, rawOptions[opt.flag]);
+  }
+  return out;
+}
+
 export function dispatch(
   sdk: StockSDK,
   spec: CommandSpec,
@@ -146,7 +168,10 @@ export function dispatch(
 ): Promise<unknown> {
   validateOptionValues(spec, ctx.options);
   validatePositionalEnum(spec, ctx.positional);
-  if (spec.invoke) return spec.invoke(sdk, ctx);
+  if (spec.invoke) {
+    const options = normalizeDeclaredOptions(spec, ctx.options);
+    return spec.invoke(sdk, options === ctx.options ? ctx : { ...ctx, options });
+  }
 
   const options = buildOptions(spec, ctx.options);
   switch (spec.argShape) {
