@@ -112,6 +112,27 @@ function parseWallClock(input: string): ParsedWallClock | null {
  * 给定一个市场时区,把"该时区的壁钟时间"换算成 UTC unix ms。
  * 使用 `Intl.DateTimeFormat` 二次查询确定时区偏移,可正确处理夏令时。
  */
+/**
+ * 缓存 Intl.DateTimeFormat：其构造是 V8 中最昂贵的操作之一(每次重载 ICU 区域数据),
+ * 而每个 (locale, tz) 的 options 固定。按行调用的 kline/quote/timeline parser 循环里
+ * 复用同一实例,避免逐行重建(3000 bar K 线原本要建 3000 个 formatter)。
+ * key 用 locale|tz —— 本模块每个 locale 对应唯一一组 options(en-US 含秒、sv-SE 不含)。
+ */
+const FORMATTER_CACHE = new Map<string, Intl.DateTimeFormat>();
+function getCachedFormatter(
+  locale: string,
+  tz: string,
+  options: Intl.DateTimeFormatOptions
+): Intl.DateTimeFormat {
+  const key = `${locale}|${tz}`;
+  let dtf = FORMATTER_CACHE.get(key);
+  if (!dtf) {
+    dtf = new Intl.DateTimeFormat(locale, { timeZone: tz, ...options });
+    FORMATTER_CACHE.set(key, dtf);
+  }
+  return dtf;
+}
+
 function wallTimeToUTC(wall: ParsedWallClock, tz: string): number {
   // 第一次:把壁钟时间当作 UTC 得到一个候选时间戳。
   const utcGuess = Date.UTC(
@@ -124,8 +145,7 @@ function wallTimeToUTC(wall: ParsedWallClock, tz: string): number {
   );
 
   // 看这个 UTC 时间在目标时区显示的壁钟时间。差值即为时区偏移。
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz,
+  const dtf = getCachedFormatter('en-US', tz, {
     hour12: false,
     year: 'numeric',
     month: '2-digit',
@@ -258,8 +278,7 @@ export function formatInTz(epoch: number | null, tz: MarketTz): string {
   // 用 sv-SE locale 直接 format —— sv-SE 天然以 `YYYY-MM-DD HH:mm:ss` 形式输出，
   // 比 formatToParts + 手动拼接更稳健（避免某些 Node ICU 实现里 minute 字段
   // 携带额外冒号后缀的怪异行为）。
-  const formatted = new Intl.DateTimeFormat('sv-SE', {
-    timeZone: tz,
+  const formatted = getCachedFormatter('sv-SE', tz, {
     hour12: false,
     year: 'numeric',
     month: '2-digit',
