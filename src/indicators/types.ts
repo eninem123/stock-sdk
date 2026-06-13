@@ -65,14 +65,22 @@ export interface ATROptions {
   period?: number;
 }
 
+/**
+ * 周期型指标(periods 复数)的文档简写入参:
+ * - `[5, 20]` 等价于 `{ periods: [5, 20] }`
+ * - `{ period: 14 }` 等价于 `{ periods: [14] }`
+ * （文档与 JSDoc 示例即简写形式,registry.normalizeIndicatorOptions 在入口归一）
+ */
+export type PeriodsShorthand = number[] | { period: number };
+
 export interface IndicatorOptions {
-  ma?: MAOptions | boolean;
+  ma?: MAOptions | PeriodsShorthand | boolean;
   macd?: MACDOptions | boolean;
   boll?: BOLLOptions | boolean;
   kdj?: KDJOptions | boolean;
-  rsi?: RSIOptions | boolean;
-  wr?: WROptions | boolean;
-  bias?: BIASOptions | boolean;
+  rsi?: RSIOptions | PeriodsShorthand | boolean;
+  wr?: WROptions | PeriodsShorthand | boolean;
+  bias?: BIASOptions | PeriodsShorthand | boolean;
   cci?: CCIOptions | boolean;
   atr?: ATROptions | boolean;
   obv?: OBVOptions | boolean;

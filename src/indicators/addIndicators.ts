@@ -19,6 +19,7 @@ import {
 import {
   buildIndicatorContext,
   getEnabledIndicatorKeys,
+  normalizeIndicatorOptions,
   INDICATOR_REGISTRY,
   type IndicatorKey,
 } from './registry';
@@ -53,13 +54,16 @@ export function addIndicators<T extends AnyHistoryKline>(
   if (klines.length === 0) {
     return [];
   }
+  // 文档简写({ ma: [5,20] } / { rsi: {period:14} })在入口归一为完整形式
+  options = normalizeIndicatorOptions(options);
 
   const context = buildIndicatorContext(klines);
   const indicatorResults = new Map<IndicatorKey, unknown[]>();
 
   for (const key of getEnabledIndicatorKeys(options)) {
     const descriptor = INDICATOR_REGISTRY[key];
-    indicatorResults.set(key, descriptor.compute(context, options[key]));
+    // 入口已 normalizeIndicatorOptions,此处断言为完整形式
+    indicatorResults.set(key, descriptor.compute(context, options[key] as never));
   }
 
   return klines.map((kline, i) => ({

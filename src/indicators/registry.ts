@@ -12,7 +12,7 @@ import { calcOBV } from './obv';
 import { calcROC } from './roc';
 import { calcRSI } from './rsi';
 import { calcSAR } from './sar';
-import type { IndicatorOptions, OHLCV } from './types';
+import type { IndicatorOptions, OHLCV, PeriodsShorthand } from './types';
 import { calcWR } from './wr';
 
 type BaseKline = AnyHistoryKline;
@@ -28,12 +28,21 @@ interface IndicatorLookback {
   emaBased?: boolean;
 }
 
+/**
+ * descriptor 只接受【归一化后】的完整形式 option(简写已在
+ * normalizeIndicatorOptions 中展开),周期型指标无需各自处理数组/period 简写。
+ */
+type CanonicalOption<K extends IndicatorKey> = Exclude<
+  IndicatorOptions[K],
+  PeriodsShorthand
+>;
+
 interface IndicatorDescriptor<K extends IndicatorKey = IndicatorKey> {
   key: K;
-  estimateLookback: (option: IndicatorOptions[K]) => IndicatorLookback;
+  estimateLookback: (option: CanonicalOption<K>) => IndicatorLookback;
   compute: (
     context: IndicatorComputationContext,
-    option: IndicatorOptions[K]
+    option: CanonicalOption<K>
   ) => unknown[];
 }
 
@@ -230,6 +239,35 @@ export const INDICATOR_REGISTRY: IndicatorDescriptorMap = {
   },
 };
 
+/** periods 复数形式的指标(支持数组 / {period} 简写) */
+const PERIODS_PLURAL_KEYS = ['ma', 'rsi', 'wr', 'bias'] as const;
+
+/**
+ * 文档简写归一(F32):`ma: [5, 20]` → `{ periods: [5, 20] }`、
+ * `rsi: { period: 14 }` → `{ periods: [14] }`。
+ * 此前文档/JSDoc 多处示例就是简写形式,但实现只认 `{ periods }`:
+ * JS 用户照抄会静默拿到默认周期(无 ma7/ma21 还把 lookback 放大到 250)。
+ * 幂等;在 addIndicators 与 estimateIndicatorLookback 入口各调一次。
+ */
+export function normalizeIndicatorOptions(options: IndicatorOptions): IndicatorOptions {
+  let out: Record<string, unknown> | null = null;
+  for (const key of PERIODS_PLURAL_KEYS) {
+    const v = options[key];
+    if (Array.isArray(v)) {
+      (out ??= { ...options })[key] = { periods: v };
+    } else if (
+      v &&
+      typeof v === 'object' &&
+      !('periods' in v) &&
+      typeof (v as { period?: unknown }).period === 'number'
+    ) {
+      const { period, ...rest } = v as { period: number };
+      (out ??= { ...options })[key] = { ...rest, periods: [period] };
+    }
+  }
+  return (out as IndicatorOptions | null) ?? options;
+}
+
 export function getEnabledIndicatorKeys(options: IndicatorOptions): IndicatorKey[] {
   return (Object.keys(INDICATOR_REGISTRY) as IndicatorKey[]).filter(
     (key) => Boolean(options[key])
@@ -241,12 +279,14 @@ export function estimateIndicatorLookback(options: IndicatorOptions): {
   hasEmaBasedIndicator: boolean;
   requiredBars: number;
 } {
+  options = normalizeIndicatorOptions(options);
   let maxLookback = 0;
   let hasEmaBasedIndicator = false;
 
   for (const key of getEnabledIndicatorKeys(options)) {
     const descriptor = INDICATOR_REGISTRY[key];
-    const lookback = descriptor.estimateLookback(options[key]);
+    // normalizeIndicatorOptions 已在函数入口归一,断言为完整形式
+    const lookback = descriptor.estimateLookback(options[key] as never);
     maxLookback = Math.max(maxLookback, lookback.bars);
     hasEmaBasedIndicator ||= Boolean(lookback.emaBased);
   }
