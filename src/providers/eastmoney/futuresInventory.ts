@@ -11,6 +11,7 @@ import type {
   ComexInventory,
 } from '../../types';
 import { fetchDatacenterList } from './datacenter';
+import { toIsoDate } from './utils';
 
 export interface FuturesInventoryOptions {
   /** 开始日期 YYYY-MM-DD（默认 2020-10-28） */
@@ -83,7 +84,7 @@ export async function getFuturesInventory(
     {
       reportName: 'RPT_FUTU_STOCKDATA',
       columns: 'SECURITY_CODE,TRADE_DATE,ON_WARRANT_NUM,ADDCHANGE',
-      filter: `(SECURITY_CODE="${upperSymbol}")(TRADE_DATE>='${startDate}')`,
+      filter: `(SECURITY_CODE="${upperSymbol}")(TRADE_DATE>='${toIsoDate(startDate)}')`,
       pageSize,
       sortColumns: 'TRADE_DATE',
       sortTypes: '-1',

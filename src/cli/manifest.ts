@@ -7,6 +7,7 @@
  * 2. ALIAS_COMMANDS —— 第 1 层高频快捷命令（带自定义 `invoke`，如 `quote` 的市场识别）。
  */
 import { normalizeSymbol, toTencentSymbol } from '../symbols';
+import { toNumberArray } from './dispatch';
 import type { StockSDK } from '../sdk';
 import { CliUsageError } from './errors';
 import type {
@@ -44,15 +45,38 @@ const PERIOD_MIN: OptionSpec = {
 };
 const KLINE_OPTS: OptionSpec[] = [PERIOD_DWM, ADJUST, START, END];
 const MINUTE_OPTS: OptionSpec[] = [PERIOD_MIN, ADJUST, START, END];
-const BATCH_OPTS: OptionSpec[] = [
+const NDAYS_OPT: OptionSpec = {
+  flag: 'ndays',
+  type: 'number',
+  desc: '最近 N 个交易日分时(仅 period=1 生效)',
+};
+// 港/美股分时支持 ndays(SDK/MCP 已支持,此前 CLI 不可达)
+const MINUTE_HKUS_OPTS: OptionSpec[] = [...MINUTE_OPTS, NDAYS_OPT];
+// A 股板块筛选与美股交易所筛选是两套取值，必须分开声明 ——
+// 此前 codes.us/batch.us 复用 sh/sz/bj/kc/cy 的 desc 且无 enum 校验，
+// 按 help 传 `--market sh` 会拼出 startsWith(undefined) 静默返回空列表。
+const CN_BOARD_OPT: OptionSpec = {
+  flag: 'market',
+  type: 'enum',
+  enum: ['sh', 'sz', 'bj', 'kc', 'cy'],
+  desc: '市场筛选 sh/sz/bj/kc/cy',
+};
+const US_MARKET_OPT: OptionSpec = {
+  flag: 'market',
+  type: 'enum',
+  enum: ['NASDAQ', 'NYSE', 'AMEX'],
+  upper: true,
+  desc: '交易所筛选 NASDAQ/NYSE/AMEX',
+};
+const BATCH_BASE_OPTS: OptionSpec[] = [
   { flag: 'batchSize', type: 'number', desc: '单批数量(默认 500)' },
   { flag: 'concurrency', type: 'number', desc: '并发数(默认 7)' },
-  { flag: 'market', type: 'string', desc: '市场筛选 sh/sz/bj/kc/cy' },
 ];
-const CODELIST_OPTS: OptionSpec[] = [
-  { flag: 'simple', type: 'boolean', desc: '去掉交易所前缀' },
-  { flag: 'market', type: 'string', desc: '市场筛选 sh/sz/bj/kc/cy' },
-];
+const BATCH_CN_OPTS: OptionSpec[] = [...BATCH_BASE_OPTS, CN_BOARD_OPT];
+const BATCH_US_OPTS: OptionSpec[] = [...BATCH_BASE_OPTS, US_MARKET_OPT];
+const SIMPLE_OPT: OptionSpec = { flag: 'simple', type: 'boolean', desc: '去掉交易所前缀' };
+const CODELIST_CN_OPTS: OptionSpec[] = [SIMPLE_OPT, CN_BOARD_OPT];
+const CODELIST_US_OPTS: OptionSpec[] = [SIMPLE_OPT, US_MARKET_OPT];
 const SYMBOL: PositionalSpec[] = [{ name: 'symbol', required: true }];
 const CODE: PositionalSpec[] = [{ name: 'code', required: true }];
 
@@ -104,23 +128,24 @@ const NS_DEFS: NsDef[] = [
   { path: 'quotes.largeOrder', shape: 'codes[]', summary: '盘口大单占比' },
   { path: 'quotes.timeline', shape: 'positional', summary: '当日分时', pos: CODE },
   // codes (4)
-  { path: 'codes.cn', shape: 'options', summary: 'A股代码列表', opts: CODELIST_OPTS },
-  { path: 'codes.us', shape: 'options', summary: '美股代码列表', opts: CODELIST_OPTS },
+  { path: 'codes.cn', shape: 'options', summary: 'A股代码列表', opts: CODELIST_CN_OPTS },
+  { path: 'codes.us', shape: 'options', summary: '美股代码列表', opts: CODELIST_US_OPTS },
   { path: 'codes.hk', shape: 'none', summary: '港股代码列表' },
   { path: 'codes.fund', shape: 'none', summary: '基金代码列表' },
   // batch (5)
-  { path: 'batch.cn', shape: 'options', summary: '全市场A股行情', opts: BATCH_OPTS },
-  { path: 'batch.hk', shape: 'options', summary: '全市场港股行情', opts: BATCH_OPTS },
-  { path: 'batch.us', shape: 'options', summary: '全市场美股行情', opts: BATCH_OPTS },
-  { path: 'batch.byCodes', shape: 'codes+options', summary: '按代码批量行情', opts: BATCH_OPTS },
+  { path: 'batch.cn', shape: 'options', summary: '全市场A股行情', opts: BATCH_CN_OPTS },
+  // hk/byCodes 的 SDK 选项没有 market(此前声明了也被静默忽略),只留批量参数
+  { path: 'batch.hk', shape: 'options', summary: '全市场港股行情', opts: BATCH_BASE_OPTS },
+  { path: 'batch.us', shape: 'options', summary: '全市场美股行情', opts: BATCH_US_OPTS },
+  { path: 'batch.byCodes', shape: 'codes+options', summary: '按代码批量行情', opts: BATCH_BASE_OPTS },
   { path: 'batch.raw', shape: 'positional', summary: '腾讯原始批量', pos: [{ name: 'params', required: true }] },
   // kline (7)
   { path: 'kline.cn', shape: 'symbol+options', summary: 'A股历史K线', pos: SYMBOL, opts: KLINE_OPTS },
   { path: 'kline.cnMinute', shape: 'symbol+options', summary: 'A股分钟K线/分时', pos: SYMBOL, opts: MINUTE_OPTS },
   { path: 'kline.hk', shape: 'symbol+options', summary: '港股历史K线', pos: SYMBOL, opts: KLINE_OPTS },
-  { path: 'kline.hkMinute', shape: 'symbol+options', summary: '港股分钟K线/分时', pos: SYMBOL, opts: MINUTE_OPTS },
+  { path: 'kline.hkMinute', shape: 'symbol+options', summary: '港股分钟K线/分时', pos: SYMBOL, opts: MINUTE_HKUS_OPTS },
   { path: 'kline.us', shape: 'symbol+options', summary: '美股历史K线', pos: SYMBOL, opts: KLINE_OPTS },
-  { path: 'kline.usMinute', shape: 'symbol+options', summary: '美股分钟K线/分时', pos: SYMBOL, opts: MINUTE_OPTS },
+  { path: 'kline.usMinute', shape: 'symbol+options', summary: '美股分钟K线/分时', pos: SYMBOL, opts: MINUTE_HKUS_OPTS },
   {
     path: 'kline.withIndicators',
     shape: 'symbol+options',
@@ -134,12 +159,13 @@ const NS_DEFS: NsDef[] = [
   { path: 'board.industry.spot', shape: 'positional', summary: '行业板块成分行情', pos: SYMBOL },
   { path: 'board.industry.constituents', shape: 'positional', summary: '行业板块成分股', pos: SYMBOL },
   { path: 'board.industry.kline', shape: 'symbol+options', summary: '行业板块K线', pos: SYMBOL, opts: KLINE_OPTS },
-  { path: 'board.industry.minuteKline', shape: 'symbol+options', summary: '行业板块分时', pos: SYMBOL, opts: MINUTE_OPTS },
+  // 板块分时的 SDK 选项只有 period(此前声明的 --adjust/--start/--end 过校验但被丢弃)
+  { path: 'board.industry.minuteKline', shape: 'symbol+options', summary: '行业板块分时', pos: SYMBOL, opts: [PERIOD_MIN] },
   { path: 'board.concept.list', shape: 'none', summary: '概念板块列表' },
   { path: 'board.concept.spot', shape: 'positional', summary: '概念板块成分行情', pos: SYMBOL },
   { path: 'board.concept.constituents', shape: 'positional', summary: '概念板块成分股', pos: SYMBOL },
   { path: 'board.concept.kline', shape: 'symbol+options', summary: '概念板块K线', pos: SYMBOL, opts: KLINE_OPTS },
-  { path: 'board.concept.minuteKline', shape: 'symbol+options', summary: '概念板块分时', pos: SYMBOL, opts: MINUTE_OPTS },
+  { path: 'board.concept.minuteKline', shape: 'symbol+options', summary: '概念板块分时', pos: SYMBOL, opts: [PERIOD_MIN] },
   // options (11)
   { path: 'options.index.spot', shape: 'positional', summary: '股指期权T型报价', pos: [{ name: 'product', required: true }, { name: 'contract', required: true }] },
   { path: 'options.index.kline', shape: 'positional', summary: '股指期权日K', pos: SYMBOL },
@@ -352,14 +378,6 @@ function invokeWithIndicators(sdk: StockSDK, ctx: InvokeContext): Promise<unknow
   return callMethod(sdk, ['kline', 'withIndicators'], [symbol, opts]);
 }
 
-function toNumberArray(value: unknown): number[] {
-  const raw = Array.isArray(value) ? value.join(',') : String(value);
-  return raw
-    .split(',')
-    .map((s) => Number(s.trim()))
-    .filter((n) => !Number.isNaN(n));
-}
-
 export const ALIAS_COMMANDS: CommandSpec[] = [
   {
     path: ['quotes', 'cnSimple'],
@@ -430,25 +448,34 @@ export const ALIAS_COMMANDS: CommandSpec[] = [
   {
     path: ['kline', 'cnMinute'],
     alias: ['minute'],
-    summary: '分钟K线/分时(--period 1/5/15/30/60；--market)',
+    summary: '分钟K线/分时(--period 1/5/15/30/60；--market；港/美 --ndays)',
     argShape: 'symbol+options',
     positional: SYMBOL,
-    options: [PERIOD_MIN, ADJUST, START, END, MARKET_ALIAS_OPT, LIMIT_OPT],
+    options: [PERIOD_MIN, ADJUST, START, END, MARKET_ALIAS_OPT, LIMIT_OPT, NDAYS_OPT],
     invoke: async (sdk, ctx) => {
       const symbol = requireSymbol(ctx, 'minute');
       const market = resolveForcedMarket(ctx.options.market) ?? detectMarketTag(symbol);
       const opts = klineOptsFromCtx(ctx);
       const method = market === 'hk' ? 'hkMinute' : market === 'us' ? 'usMinute' : 'cnMinute';
+      if (ctx.options.ndays !== undefined) {
+        // A 股分时接口无 ndays:声明了就要么生效要么报错,不静默丢弃
+        if (method === 'cnMinute') {
+          throw new CliUsageError('--ndays 仅支持港/美股分时', '示例: stock-sdk minute 00700 --ndays 5');
+        }
+        opts.ndays = Number(ctx.options.ndays);
+      }
       return callMethod(sdk, ['kline', method], [symbol, opts]);
     },
   },
   {
     path: ['kline', 'withIndicators'],
     alias: ['indicators'],
-    summary: '带指标K线(--ma 5,10,20 --macd --kdj --rsi --boll ...)',
+    summary: '带指标K线(--ma 5,10,20 --macd --kdj --rsi --boll ...；--market)',
     argShape: 'symbol+options',
     positional: SYMBOL,
-    options: [PERIOD_DWM, ADJUST, START, END, ...INDICATOR_OPTS],
+    // 与命名空间 kline withIndicators 同一组选项(此前别名漏 --market，
+    // invoke 明明支持却被严格校验拒绝)
+    options: WITH_INDICATORS_OPTS,
     invoke: invokeWithIndicators,
   },
   {
@@ -487,7 +514,14 @@ export const ALIAS_COMMANDS: CommandSpec[] = [
       const market = ctx.positional[0];
       const opts: Record<string, unknown> = {};
       if (ctx.options.simple === true) opts.simple = true;
-      if (ctx.options.board !== undefined) opts.market = ctx.options.board;
+      // --board 是 A 股板块筛选(sh/sz/bj/kc/cy)，不透传给美股
+      // (美股 market 取值是 NASDAQ/NYSE/AMEX，错误取值会静默返回空列表)
+      if (ctx.options.board !== undefined) {
+        if (market !== 'a') {
+          throw new CliUsageError('--board 仅支持 A 股(market=a)', '可选: sh / sz / bj / kc / cy');
+        }
+        opts.market = ctx.options.board;
+      }
       switch (market) {
         case 'a':
           return callMethod(sdk, ['codes', 'cn'], [opts]);

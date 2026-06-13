@@ -24,6 +24,7 @@ import type {
   NorthboundIndividualItem,
 } from '../../types';
 import { fetchDatacenterList, parseDcDate } from './datacenter';
+import { toIsoDate } from './utils';
 
 /** 北向持股排行选项 */
 export interface NorthboundHoldingRankOptions {
@@ -256,8 +257,10 @@ export async function getNorthboundHistory(
   // 对外简化：北向 = 沪股通+深股通合计；南向 = 港股通(沪)+(深) 合计
   // 实际通常以 BOARD_TYPE 区分整体，这里 BOARD_TYPE: 1=北向 0=南向
   const filters: string[] = [direction === 'north' ? '(BOARD_TYPE="1")' : '(BOARD_TYPE="0")'];
-  if (startDate) filters.push(`(TRADE_DATE>='${startDate}')`);
-  if (endDate) filters.push(`(TRADE_DATE<='${endDate}')`);
+  // datacenter filter 只认 YYYY-MM-DD：YYYYMMDD（CLI help 的文档格式）必须归一，
+  // 否则字典序比较 '2024-..' < '20240101' 会排除所有行（静默空结果）
+  if (startDate) filters.push(`(TRADE_DATE>='${toIsoDate(startDate)}')`);
+  if (endDate) filters.push(`(TRADE_DATE<='${toIsoDate(endDate)}')`);
 
   return fetchDatacenterList(
     client,
@@ -301,8 +304,8 @@ export async function getNorthboundIndividual(
   const { startDate, endDate } = options;
 
   const filters: string[] = [`(SECURITY_CODE="${pureSymbol}")`];
-  if (startDate) filters.push(`(TRADE_DATE>='${startDate}')`);
-  if (endDate) filters.push(`(TRADE_DATE<='${endDate}')`);
+  if (startDate) filters.push(`(TRADE_DATE>='${toIsoDate(startDate)}')`);
+  if (endDate) filters.push(`(TRADE_DATE<='${toIsoDate(endDate)}')`);
 
   return fetchDatacenterList(
     client,

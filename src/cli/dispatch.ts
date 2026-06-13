@@ -78,12 +78,20 @@ function lastOf(raw: unknown): unknown {
   return Array.isArray(raw) ? raw[raw.length - 1] : raw;
 }
 
-function toNumberArray(raw: unknown): number[] {
+/**
+ * 逗号分隔的 number[] flag 解析（当前仅指标周期使用）。
+ * 空段先过滤再转数（`Number('') === 0`，否则 `--ma 5,10,` 的尾逗号会产出
+ * 周期 0 → calcSMA 0/0 → 一列 NaN 的 ma0）；周期必须是正整数。
+ * 与 manifest.ts 的 buildIndicatorOptions 共用（此前两份逐字重复的实现）。
+ */
+export function toNumberArray(raw: unknown): number[] {
   const text = Array.isArray(raw) ? raw.join(',') : String(raw);
   return text
     .split(',')
-    .map((s) => Number(s.trim()))
-    .filter((n) => !Number.isNaN(n));
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .map((s) => Number(s))
+    .filter((n) => Number.isInteger(n) && n > 0);
 }
 
 function buildPositionalArgs(spec: CommandSpec, positional: string[]): unknown[] {

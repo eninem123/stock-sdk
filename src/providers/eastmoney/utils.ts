@@ -4,6 +4,45 @@
 import { RequestClient } from '../../core';
 
 /**
+ * 把 YYYYMMDD 转为 YYYY-MM-DD（datacenter filter 要求横线格式）。
+ * 其它格式原样返回。dragonTiger/blockTrade/northbound/futuresInventory 共用：
+ * CLI help 文档的日期格式是 YYYYMMDD，若不归一直接插进
+ * `(TRADE_DATE>='...')` 过滤式，字典序比较会把所有行排除（静默空结果）。
+ */
+export function toIsoDate(date: string): string {
+  if (/^\d{8}$/.test(date)) {
+    return `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`;
+  }
+  return date;
+}
+
+/**
+ * 把分钟K线的 startDate/endDate 归一成可与行时间（'YYYY-MM-DD HH:mm'）
+ * 做字符串比较的窗口：
+ * - 'YYYYMMDD'（8 位）补横线 —— 否则 '20250601' 在 index 4 处 '0' > '-'，
+ *   会把所有行整天误过滤成空结果
+ * - 仅日期（10 位）的 end 补 ' 23:59' —— 否则 'YYYY-MM-DD HH:mm' > 'YYYY-MM-DD'
+ *   同样整天误过滤
+ * - 'YYYY-MM-DDTHH:mm' 的 'T' 归一为空格，并截到分钟精度
+ */
+export function normalizeMinuteWindow(
+  startDate: string,
+  endDate: string
+): { start: string; end: string } {
+  const norm = (v: string): string => {
+    let s = v.replace('T', ' ').trim();
+    if (/^\d{8}$/.test(s)) {
+      s = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+    }
+    return s.slice(0, 16);
+  };
+  const start = norm(startDate);
+  let end = norm(endDate);
+  if (end.length === 10) end += ' 23:59';
+  return { start, end };
+}
+
+/**
  * 分页获取数据
  * @param client 请求客户端
  * @param baseUrl 基础 URL
