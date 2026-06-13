@@ -117,18 +117,52 @@ function parseWallClock(input: string): ParsedWallClock | null {
  * 缓存 Intl.DateTimeFormat：其构造是 V8 中最昂贵的操作之一(每次重载 ICU 区域数据),
  * 而每个 (locale, tz) 的 options 固定。按行调用的 kline/quote/timeline parser 循环里
  * 复用同一实例,避免逐行重建(3000 bar K 线原本要建 3000 个 formatter)。
- * key 用 locale|tz —— 本模块每个 locale 对应唯一一组 options(en-US 含秒、sv-SE 不含)。
+ *
+ * F38: 本模块只有两组固定 options(en-US 含秒解析用 / sv-SE 不含秒展示用)。
+ * 此前每次取缓存都 `JSON.stringify(options)` 重建 key(5600 行批量解析约 1.3ms
+ * 纯 key 开销),改为 kind 常量表 + 预拼 key 前缀('en-US|' / 'sv-SE|')+ tz 拼接。
+ * 缓存命中行为与 formatter 配置不变。
  */
+type FormatterKind = 'wallParts' | 'svDisplay';
+const FORMATTER_SPECS: Record<
+  FormatterKind,
+  { locale: string; keyPrefix: string; options: Intl.DateTimeFormatOptions }
+> = {
+  // displayedWallUtc 用：formatToParts 拆字段,含秒
+  wallParts: {
+    locale: 'en-US',
+    keyPrefix: 'en-US|',
+    options: {
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    },
+  },
+  // formatInTz 用：sv-SE 天然输出 `YYYY-MM-DD HH:mm`,不含秒
+  svDisplay: {
+    locale: 'sv-SE',
+    keyPrefix: 'sv-SE|',
+    options: {
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    },
+  },
+};
 const FORMATTER_CACHE = new Map<string, Intl.DateTimeFormat>();
-function getCachedFormatter(
-  locale: string,
-  tz: string,
-  options: Intl.DateTimeFormatOptions
-): Intl.DateTimeFormat {
-  const key = `${locale}|${tz}|${JSON.stringify(options)}`;
+function getCachedFormatter(kind: FormatterKind, tz: string): Intl.DateTimeFormat {
+  const spec = FORMATTER_SPECS[kind];
+  const key = spec.keyPrefix + tz;
   let dtf = FORMATTER_CACHE.get(key);
   if (!dtf) {
-    dtf = new Intl.DateTimeFormat(locale, { timeZone: tz, ...options });
+    dtf = new Intl.DateTimeFormat(spec.locale, { timeZone: tz, ...spec.options });
     FORMATTER_CACHE.set(key, dtf);
   }
   return dtf;
@@ -136,15 +170,7 @@ function getCachedFormatter(
 
 /** 求 UTC 时刻 `tsUtc` 在目标时区显示的壁钟时间（编码为 UTC ms，便于做差求偏移） */
 function displayedWallUtc(tsUtc: number, tz: string): number {
-  const dtf = getCachedFormatter('en-US', tz, {
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  const dtf = getCachedFormatter('wallParts', tz);
   const parts = dtf.formatToParts(new Date(tsUtc));
   const partMap: Record<string, string> = {};
   for (const p of parts) {
@@ -299,14 +325,7 @@ export function formatInTz(epoch: number | null, tz: MarketTz): string {
   // 用 sv-SE locale 直接 format —— sv-SE 天然以 `YYYY-MM-DD HH:mm:ss` 形式输出，
   // 比 formatToParts + 手动拼接更稳健（避免某些 Node ICU 实现里 minute 字段
   // 携带额外冒号后缀的怪异行为）。
-  const formatted = getCachedFormatter('sv-SE', tz, {
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(epoch));
+  const formatted = getCachedFormatter('svDisplay', tz).format(new Date(epoch));
   // sv-SE 输出可能是 "2024-05-12 09:30" 或 "2024-05-12 09:30:00"，截到分钟即可。
   // 同时把可能出现的 "24:" 归一化为 "00:"
   const match = formatted.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})/);

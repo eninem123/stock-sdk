@@ -141,6 +141,22 @@ describe('dispatch — argShape 实参组装', () => {
     expect(fn).toHaveBeenCalledWith(['110011']);
   });
 
+  it('quote 混合代码自动识别分组(F38 单次解析后仍正确分组/格式化)', async () => {
+    const cn = vi.fn().mockResolvedValue([]);
+    const hk = vi.fn().mockResolvedValue([]);
+    const us = vi.fn().mockResolvedValue([]);
+    const sdk = { quotes: { cnSimple: cn, hk, us } } as unknown as StockSDK;
+    const m = findCommand(['quote', '600519'])!;
+    await dispatch(sdk, m.spec, {
+      // A股补腾讯前缀；港股 4/5 位补零纯代码；美股纯字母大写；无法解析(@@) 原样归入 A 股组
+      positional: ['600519', '00700', '0700', 'AAPL', '@@'],
+      options: {},
+    });
+    expect(cn).toHaveBeenCalledWith(['sh600519', '@@']);
+    expect(hk).toHaveBeenCalledWith(['00700', '00700']);
+    expect(us).toHaveBeenCalledWith(['AAPL']);
+  });
+
   it('P2-2 call quotes.cn --args 原始直通', async () => {
     const fn = vi.fn().mockResolvedValue([]);
     const sdk = { quotes: { cn: fn } } as unknown as StockSDK;

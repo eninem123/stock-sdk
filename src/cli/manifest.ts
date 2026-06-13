@@ -179,14 +179,22 @@ export const ALIAS_COMMANDS: CommandSpec[] = [
       // 按市场分组(显式优先，否则按代码识别；基金不参与自动识别，须显式 --market fund)
       const groups: Record<'a' | 'hk' | 'us' | 'fund', string[]> = { a: [], hk: [], us: [], fund: [] };
       for (const c of codes) {
-        const tag = forced ?? detectMarketTag(c);
-        if (tag === 'fund') {
+        if (forced === 'fund') {
           groups.fund.push(c); // 基金代码直接透传(quotes.fund 接受纯代码)
           continue;
         }
-        // 规范化成各市场期望的代码格式：A股需带交易所前缀(sh600519)，港/美用纯代码
+        // F38: 自动识别此前是 detectMarketTag(内部 normalizeSymbol)+ 按市场再
+        // normalizeSymbol 的双重解析；改为每 code 单次 normalizeSymbol,市场标签
+        // 直接从解析结果派生(HK→hk / US→us / 其它→a)。forced 时仍按指定市场
+        // 单次解析(该路径本来就只解析一次)。分组与代码格式行为不变：
+        // A股 push 腾讯前缀格式(sh600519)，港/美 push 纯代码，解析失败原样透传
+        // (自动识别失败归入 'a'，与旧 detectMarketTag 的 catch → 'a' 一致)。
+        let tag: 'a' | 'hk' | 'us' = forced ?? 'a';
         try {
-          const ns = normalizeSymbol(c, { market: tagToMarket(tag) });
+          const ns = forced
+            ? normalizeSymbol(c, { market: tagToMarket(forced) })
+            : normalizeSymbol(c);
+          if (!forced) tag = ns.market === 'HK' ? 'hk' : ns.market === 'US' ? 'us' : 'a';
           groups[tag].push(tag === 'a' ? toTencentSymbol(ns) : ns.code);
         } catch {
           groups[tag].push(c);

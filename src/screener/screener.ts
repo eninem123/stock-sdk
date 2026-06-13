@@ -37,7 +37,10 @@ export function screen<T>(items: readonly T[]): ScreenerBuilder<T> {
     },
     sortBy(selector, direction = 'desc') {
       const sign = direction === 'asc' ? 1 : -1;
-      current = current.slice().sort((a, b) => {
+      // F38: current 始终是 builder 私有副本(入口 items.slice()、filter 产新数组),
+      // 原地 sort 即可,省掉每次 sortBy 的整数组拷贝(全市场 5600 元素 ~45KB/次)。
+      // 对外不可变性不变：入口已拷贝调用方数组,top/toArray 仍返回新数组。
+      current.sort((a, b) => {
         const va = selector(a);
         const vb = selector(b);
         const aOk = Number.isFinite(va);
