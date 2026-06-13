@@ -17,6 +17,7 @@ import {
   DEFAULT_CONCURRENCY,
 } from '../../core';
 import type { FullQuote, HKQuote, USQuote } from '../../types';
+import { EXCHANGE_TO_SECID_PREFIX } from '../../symbols';
 import { getFullQuotes } from './quote';
 import { getHKQuotes } from './hkQuote';
 import { getUSQuotes } from './usQuote';
@@ -220,13 +221,6 @@ export interface GetUSCodeListOptions {
   market?: USMarket;
 }
 
-// 市场前缀映射
-const US_MARKET_PREFIX: Record<USMarket, string> = {
-  NASDAQ: '105.',
-  NYSE: '106.',
-  AMEX: '107.',
-};
-
 /**
  * 从远程获取美股代码列表
  * @param client 请求客户端
@@ -255,8 +249,10 @@ export async function getUSCodeList(
   let result = allCodes.slice();
 
   // 筛选市场
+  // F41: 前缀映射复用 symbols/adapters 的 EXCHANGE_TO_SECID_PREFIX
+  // (NASDAQ/NYSE/AMEX → 105/106/107),不再本地重复声明一份。
   if (market) {
-    const prefix = US_MARKET_PREFIX[market];
+    const prefix = `${EXCHANGE_TO_SECID_PREFIX[market]}.`;
     result = result.filter((code) => code.startsWith(prefix));
   }
 

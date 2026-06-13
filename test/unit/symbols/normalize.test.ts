@@ -2,7 +2,7 @@
  * normalizeSymbol 穷举解析测试（v2 A1 地基正确性锚）
  */
 import { describe, it, expect } from 'vitest';
-import { normalizeSymbol } from '../../../src/symbols';
+import { normalizeSymbol, marketOf } from '../../../src/symbols';
 import { InvalidSymbolError } from '../../../src/core';
 
 describe('normalizeSymbol — A 股', () => {
@@ -120,5 +120,29 @@ describe('normalizeSymbol — hint 与 SymbolRef', () => {
 describe('normalizeSymbol — 非法输入', () => {
   it.each(['', '   ', '!!!', '@#$'])('%j → InvalidSymbolError', (bad) => {
     expect(() => normalizeSymbol(bad)).toThrow(InvalidSymbolError);
+  });
+});
+
+describe('marketOf — F42 detectMarket 双实现收编', () => {
+  it.each([
+    ['600519', 'CN'],
+    ['sh600519', 'CN'],
+    ['600519.SH', 'CN'],
+    ['00700', 'HK'],
+    ['0700', 'HK'],
+    ['hk700', 'HK'],
+    ['116.00700', 'HK'],
+    ['00700.HK', 'HK'],
+    ['AAPL', 'US'],
+    ['105.AAPL', 'US'],
+    ['usAAPL', 'US'],
+  ] as const)('%s → %s', (input, market) => {
+    expect(marketOf(input)).toBe(market);
+  });
+
+  it('解析失败返回 undefined,不抛错(fallback 决策留给调用方)', () => {
+    expect(marketOf('')).toBeUndefined();
+    expect(marketOf('!!!')).toBeUndefined();
+    expect(marketOf('@#$')).toBeUndefined();
   });
 });

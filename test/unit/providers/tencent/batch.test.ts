@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { RequestClient } from '../../../../src/core';
-import { getAShareCodeList } from '../../../../src/providers/tencent';
+import { getAShareCodeList, getUSCodeList } from '../../../../src/providers/tencent';
 
 // 关掉 retry，避免错误响应触发 backoff
 const client = new RequestClient({ retry: { maxRetries: 0 } });
@@ -47,5 +47,52 @@ describe('getAShareCodeList market filter', () => {
     expect([...(await getAShareCodeList(client, { market: 'sz' }))].sort()).toEqual(
       ['sz000001', 'sz300750'].sort()
     );
+  });
+});
+
+describe('getUSCodeList market filter (F41: 前缀映射复用 symbols 层)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stub(list: string[]) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        return new Response(JSON.stringify({ list }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      })
+    );
+  }
+
+  const US_LIST = ['105.AAPL', '105.MSFT', '106.BABA', '107.IMO', '1050.FAKE'];
+
+  it('filters NASDAQ/NYSE/AMEX by 105./106./107. prefix', async () => {
+    stub(US_LIST);
+    expect(await getUSCodeList(client, { market: 'NASDAQ' })).toEqual([
+      '105.AAPL',
+      '105.MSFT',
+    ]);
+    expect(await getUSCodeList(client, { market: 'NYSE' })).toEqual([
+      '106.BABA',
+    ]);
+    expect(await getUSCodeList(client, { market: 'AMEX' })).toEqual([
+      '107.IMO',
+    ]);
+  });
+
+  it("prefix match includes the dot ('1050.FAKE' 不被 105 误吞)", async () => {
+    stub(US_LIST);
+    const nasdaq = await getUSCodeList(client, { market: 'NASDAQ' });
+    expect(nasdaq).not.toContain('1050.FAKE');
+  });
+
+  it('simple:true strips the market prefix after filtering', async () => {
+    stub(US_LIST);
+    expect(
+      await getUSCodeList(client, { market: 'NASDAQ', simple: true })
+    ).toEqual(['AAPL', 'MSFT']);
   });
 });

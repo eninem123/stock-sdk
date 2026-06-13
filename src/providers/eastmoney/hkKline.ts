@@ -20,6 +20,7 @@ import type {
   HKMinuteKline,
   HKMinuteTimeline,
 } from '../../types';
+import { normalizeSymbol, toEastmoneySecid } from '../../symbols';
 import {
   createHistoryKlineProvider,
   type HistoryKlineRequestOptions,
@@ -37,10 +38,13 @@ const getHKHistoryKlineByFactory = createHistoryKlineProvider<HKHistoryKline>({
   url: EM_HK_KLINE_URL,
   tz: MARKET_TZ.HK,
   normalizeSymbol: (symbol) => {
-    const pureSymbol = symbol.replace(/^hk/i, '').padStart(5, '0');
+    // F39: 收编到 v2 symbols 层(对照 aShareKline 已迁移范式),不再手拼
+    // `116.${...}` —— '116.00700' / '00700.HK' 等 symbols 层支持的输入形式
+    // 从此对 kline.hk 同样可用,且 symbols 的后续修复自动生效。
+    const ns = normalizeSymbol(symbol, { market: 'HK' });
     return {
-      secid: `116.${pureSymbol}`,
-      fallbackCode: pureSymbol,
+      secid: toEastmoneySecid(ns),
+      fallbackCode: ns.code,
     };
   },
   enrichItem: (base) => ({
@@ -111,8 +115,11 @@ export async function getHKMinuteKline(
   assertMinutePeriod(period);
   assertAdjustType(adjust);
 
-  const pureSymbol = symbol.replace(/^hk/i, '').padStart(5, '0');
-  const secid = `116.${pureSymbol}`;
+  // F39: 同上,经 symbols 层归一( '00700' / 'hk00700' / '0700' / '700' →
+  // secid 116.00700),pureSymbol(code 字段回填)取归一结果的 code。
+  const ns = normalizeSymbol(symbol, { market: 'HK' });
+  const secid = toEastmoneySecid(ns);
+  const pureSymbol = ns.code;
 
   // 东方财富 trends2 / kline 返回的 time 字符串以 +08:00 (CST) 表示。
   // 港股 HKT 与 CST 同为 UTC+8 → 数值上 HK 没有偏移问题，但为统一处理风格

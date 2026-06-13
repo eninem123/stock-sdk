@@ -10,7 +10,12 @@
  * "周一-周五 + 已知交易时段"判断。法定假日不会被识别。
  */
 import type { QuoteService } from './quoteService';
-import { MARKET_TZ, type MarketTz, InvalidArgumentError } from '../core';
+import {
+  MARKET_TZ,
+  type MarketTz,
+  InvalidArgumentError,
+  todayInTz,
+} from '../core';
 
 /**
  * 市场实时状态。
@@ -74,13 +79,17 @@ const MARKET_SESSIONS: Record<SupportedMarket, MarketSession> = {
   },
 };
 
-/** 把多种输入归一化为 `'YYYY-MM-DD'` (按 `tz` 的当日)。 */
+/**
+ * 把多种输入归一化为 `'YYYY-MM-DD'` (按 `tz` 的当日)。
+ * F43: 时区日期格式化收编到 core/time 的 todayInTz —— 此前本文件的
+ * formatDateInTz 每次调用都重建 Intl.DateTimeFormat,绕过了 FORMATTER_CACHE。
+ */
 function normalizeDate(input: string | Date | undefined, tz: MarketTz): string {
   if (input == null) {
-    return formatDateInTz(new Date(), tz);
+    return todayInTz(tz);
   }
   if (input instanceof Date) {
-    return formatDateInTz(input, tz);
+    return todayInTz(tz, input.getTime());
   }
   const trimmed = input.trim();
   // YYYY-MM-DD
@@ -92,23 +101,11 @@ function normalizeDate(input: string | Date | undefined, tz: MarketTz): string {
   // 兜底:试着 new Date(input) 解析
   const parsed = new Date(trimmed);
   if (!Number.isNaN(parsed.getTime())) {
-    return formatDateInTz(parsed, tz);
+    return todayInTz(tz, parsed.getTime());
   }
   throw new InvalidArgumentError(
     `Unsupported date input: ${JSON.stringify(input)}. Expected 'YYYY-MM-DD', 'YYYYMMDD', or Date.`
   );
-}
-
-/** 取一个 Date 在指定时区下的"日期"部分 (`YYYY-MM-DD`)。 */
-function formatDateInTz(date: Date, tz: MarketTz): string {
-  const dtf = new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  // en-CA 输出 YYYY-MM-DD
-  return dtf.format(date);
 }
 
 /** 取一个 Date 在指定时区下的 "(分钟数, 周几 1=Mon..7=Sun)"。 */

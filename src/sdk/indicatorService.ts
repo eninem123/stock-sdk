@@ -2,7 +2,7 @@ import { addIndicators, estimateIndicatorLookback, type IndicatorOptions, type K
 import type { AnyHistoryKline } from '../types';
 import type { KlineService } from './klineService';
 import type { QuoteService } from './quoteService';
-import { normalizeSymbol } from '../symbols';
+import { marketOf } from '../symbols';
 
 export type MarketType = 'A' | 'HK' | 'US';
 
@@ -45,14 +45,10 @@ export class IndicatorService {
   ) {}
 
   private detectMarket(symbol: string): MarketType {
-    // 复用统一符号模型,避免与 normalizeSymbol 双轨漂移
-    // (如 '0700' 4 位港股、'hk700'、'116.00700'、'00700.HK' 都能正确归类到 HK)
-    try {
-      const ns = normalizeSymbol(symbol);
-      return ns.market === 'HK' ? 'HK' : ns.market === 'US' ? 'US' : 'A';
-    } catch {
-      return 'A';
-    }
+    // F42: 市场解析收编到 symbols/marketOf(与 CLI detectMarketTag 共享实现);
+    // 解析失败(undefined)兜底 'A' 的决策保留在本调用方。
+    const market = marketOf(symbol);
+    return market === 'HK' ? 'HK' : market === 'US' ? 'US' : 'A';
   }
 
   private calcActualStartDate(

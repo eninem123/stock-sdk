@@ -123,7 +123,7 @@ function parseWallClock(input: string): ParsedWallClock | null {
  * 纯 key 开销),改为 kind 常量表 + 预拼 key 前缀('en-US|' / 'sv-SE|')+ tz 拼接。
  * 缓存命中行为与 formatter 配置不变。
  */
-type FormatterKind = 'wallParts' | 'svDisplay';
+type FormatterKind = 'wallParts' | 'svDisplay' | 'dateOnly';
 const FORMATTER_SPECS: Record<
   FormatterKind,
   { locale: string; keyPrefix: string; options: Intl.DateTimeFormatOptions }
@@ -153,6 +153,18 @@ const FORMATTER_SPECS: Record<
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
+    },
+  },
+  // todayInTz 用：en-CA 天然输出 `YYYY-MM-DD`。
+  // F43: 不复用 svDisplay 截前 10 位 —— 不含 hour 字段就彻底避开个别 ICU
+  // 把午夜输出成 "24:00"(归属前一日)时日期部分跟着偏一天的边角。
+  dateOnly: {
+    locale: 'en-CA',
+    keyPrefix: 'en-CA|',
+    options: {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
     },
   },
 };
@@ -332,4 +344,24 @@ export function formatInTz(epoch: number | null, tz: MarketTz): string {
   if (!match) return formatted;
   const hour = match[2] === '24' ? '00' : match[2];
   return `${match[1]} ${hour}:${match[3]}`;
+}
+
+/**
+ * 取某一 UTC 时刻在指定市场时区下的"当日日期"字符串（`YYYY-MM-DD`）。
+ *
+ * F43: 收编此前散落各处的"北京时间今天"手写实现 —— 手动 `+8h` UTC 算术
+ * (topicData)、本地时区 `getFullYear()`(fund,跨年 ±1 真 bug)、每次调用
+ * 重建 `Intl.DateTimeFormat`(tradingCalendarService) —— 统一走本模块的
+ * FORMATTER_CACHE,夏令时(美东)由 Intl 正确处理。
+ *
+ * @param tz    市场时区(使用 `MARKET_TZ`)
+ * @param epoch UTC unix 毫秒时间戳,默认取 `Date.now()`(当前时刻)
+ *
+ * @example
+ * todayInTz(MARKET_TZ.CN);                       // 北京时间今天,如 '2026-06-11'
+ * todayInTz(MARKET_TZ.US, 1764547200000);        // 指定时刻的美东日期
+ * todayInTz(MARKET_TZ.CN).replace(/-/g, '');     // 需要 'YYYYMMDD' 时由调用方去横线
+ */
+export function todayInTz(tz: MarketTz, epoch: number = Date.now()): string {
+  return getCachedFormatter('dateOnly', tz).format(new Date(epoch));
 }

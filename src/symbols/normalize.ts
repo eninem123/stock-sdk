@@ -240,3 +240,19 @@ export function normalizeSymbol(
 
   throw new InvalidSymbolError(String(rawInput));
 }
+
+/**
+ * 解析符号所属市场;解析失败返回 `undefined`,不抛错。
+ *
+ * F42: 收编 SDK(indicatorService.detectMarket)与 CLI(manifest.detectMarketTag)
+ * 各自 wrap normalizeSymbol + catch 的双实现。本函数**不**替调用方决定解析失败
+ * 时的兜底市场 —— "失败归 A 股"之类的 fallback 决策保留在各调用方(各一行),
+ * 避免把上层策略埋进共享符号层。
+ */
+export function marketOf(input: SymbolInput): Market | undefined {
+  try {
+    return normalizeSymbol(input).market;
+  } catch {
+    return undefined;
+  }
+}

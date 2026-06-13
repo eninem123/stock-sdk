@@ -8,7 +8,7 @@
  * 2. ALIAS_COMMANDS —— 第 1 层高频快捷命令（带自定义 `invoke`，如 `quote` 的市场识别），
  *    保持手写，可复用 option 片段经 `toOptionSpec` 取自 spec。
  */
-import { normalizeSymbol, toTencentSymbol } from '../symbols';
+import { marketOf, normalizeSymbol, toTencentSymbol } from '../symbols';
 import { toNumberArray, invokeMethod } from './dispatch';
 import type { StockSDK } from '../sdk';
 import { CliUsageError } from './errors';
@@ -79,14 +79,14 @@ const QUOTE_MARKET_OPT: OptionSpec = {
 };
 const LIMIT_OPT: OptionSpec = { flag: 'limit', type: 'number', desc: '只取前 N 条(CLI 输出层裁剪)' };
 
-/** symbol 智能识别市场 → 'a'|'hk'|'us'（CLI 别名层用）。 */
+/**
+ * symbol 智能识别市场 → 'a'|'hk'|'us'（CLI 别名层用）。
+ * F42: 解析收编到 symbols/marketOf(与 SDK indicatorService.detectMarket 共享);
+ * 解析失败(undefined)归 'a' 的 fallback 决策保留在 CLI 层。
+ */
 function detectMarketTag(symbol: string): 'a' | 'hk' | 'us' {
-  try {
-    const ns = normalizeSymbol(symbol);
-    return ns.market === 'HK' ? 'hk' : ns.market === 'US' ? 'us' : 'a';
-  } catch {
-    return 'a';
-  }
+  const market = marketOf(symbol);
+  return market === 'HK' ? 'hk' : market === 'US' ? 'us' : 'a';
 }
 
 /** CLI 市场标签 → SDK Market。 */

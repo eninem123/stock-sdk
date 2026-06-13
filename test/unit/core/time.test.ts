@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   MARKET_TZ,
   parseMarketTime,
   buildTimeMeta,
   buildTimeMetaFromDateAndTime,
   formatInTz as formatInTzMinuteOnly,
+  todayInTz,
 } from '../../../src/core/time';
 
 /**
@@ -177,6 +178,40 @@ describe('core/time', () => {
       // 2024-01-05 03:07 in Shanghai
       const epoch = parseMarketTime('2024-01-05 03:07', MARKET_TZ.CN);
       expect(formatInTzMinuteOnly(epoch, MARKET_TZ.CN)).toBe('2024-01-05 03:07');
+    });
+  });
+
+  describe('todayInTz (F43: 各处"北京时间今天"手写实现收编)', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('returns the market-local date for a given epoch (UTC 跨日 → 北京已是次日)', () => {
+      // UTC 2025-12-31 20:00 = 北京 2026-01-01 04:00 = 纽约 2025-12-31 15:00 EST
+      const epoch = Date.UTC(2025, 11, 31, 20, 0);
+      expect(todayInTz(MARKET_TZ.CN, epoch)).toBe('2026-01-01');
+      expect(todayInTz(MARKET_TZ.US, epoch)).toBe('2025-12-31');
+      expect(todayInTz(MARKET_TZ.HK, epoch)).toBe('2026-01-01');
+    });
+
+    it('handles US DST correctly (EDT 时段)', () => {
+      // UTC 2026-05-27 02:00 = 纽约 2026-05-26 22:00 EDT(仍是 26 日)
+      const epoch = Date.UTC(2026, 4, 27, 2, 0);
+      expect(todayInTz(MARKET_TZ.US, epoch)).toBe('2026-05-26');
+      expect(todayInTz(MARKET_TZ.CN, epoch)).toBe('2026-05-27');
+    });
+
+    it('defaults to Date.now() when epoch omitted', () => {
+      // 只 fake Date,保持 timer 真实,避免干扰其它异步设施
+      vi.useFakeTimers({ now: Date.UTC(2025, 11, 31, 20, 0), toFake: ['Date'] });
+      expect(todayInTz(MARKET_TZ.CN)).toBe('2026-01-01');
+    });
+
+    it('output is always zero-padded YYYY-MM-DD (可 replace 横线得 YYYYMMDD)', () => {
+      const epoch = Date.UTC(2024, 0, 5, 12, 0);
+      const s = todayInTz(MARKET_TZ.CN, epoch);
+      expect(s).toBe('2024-01-05');
+      expect(s.replace(/-/g, '')).toBe('20240105');
     });
   });
 });

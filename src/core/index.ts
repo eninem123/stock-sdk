@@ -45,6 +45,7 @@ export {
   safeNumberOrNull,
   toNumber,
   toNumberSafe,
+  toFiniteNumberOrNull,
 } from './parser';
 
 // 工具函数
@@ -173,4 +174,5 @@ export {
   buildTimeMeta,
   buildTimeMetaFromDateAndTime,
   formatInTz,
+  todayInTz,
 } from './time';
