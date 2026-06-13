@@ -3,6 +3,7 @@
  * 衡量价格变化的速度和幅度
  */
 import type { OHLCV } from './types';
+import { SlidingWindowSum } from './ma';
 
 /**
  * ROC 配置选项
@@ -65,19 +66,17 @@ export function calcROC(data: OHLCV[], options: ROCOptions = {}): ROCResult[] {
     results.push({ roc, signal: null });
   }
 
-  // 计算信号线
+  // 计算信号线 —— F36: 滑窗累计（O(n)）替换逐 bar 重扫整窗（O(n×signalPeriod)）。
+  // null 语义不变：窗口内任一 roc 为 null → 该位 signal 保持 null；
+  // 赋值起点 i >= period + signalPeriod - 1 与旧实现一致（更早的窗口必含
+  // 前导 null，本就不会赋值）；信号线与旧实现一样不做舍入。
   if (signalPeriod && signalPeriod > 0) {
-    for (let i = period + signalPeriod - 1; i < results.length; i++) {
-      let sum = 0;
-      let count = 0;
-      for (let j = i - signalPeriod + 1; j <= i; j++) {
-        if (results[j].roc !== null) {
-          sum += results[j].roc!;
-          count++;
-        }
-      }
-      if (count === signalPeriod) {
-        results[i].signal = sum / signalPeriod;
+    const rocSeries: (number | null)[] = results.map((r) => r.roc);
+    const win = new SlidingWindowSum(rocSeries, signalPeriod);
+    for (let i = 0; i < results.length; i++) {
+      win.advance(i);
+      if (i >= period + signalPeriod - 1 && win.nonNullCount === signalPeriod) {
+        results[i].signal = win.value / signalPeriod;
       }
     }
   }

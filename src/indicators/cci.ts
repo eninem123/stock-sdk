@@ -38,6 +38,15 @@ export function calcCCI(
     return (d.high + d.low + d.close) / 3;
   });
 
+  // F36 评估后**两个窗口循环都保持逐窗**，理由：
+  // 1) MD 围绕每个窗口各自的均值取绝对偏差，均值逐窗变化导致 |tp_j − ma|
+  //    各项随窗口整体改变，无法像 Σx/Σx² 那样增量维护 —— MD 这层 O(n×period)
+  //    无论如何省不掉，整体复杂度阶不因均值 rolling 而改变。
+  // 2) 均值若改 rolling，累计的 ±1ulp 残差会破坏平段（横盘/停牌/一字板）上
+  //    `md === 0` 的精确判定：旧实现逐窗求和在全等窗口上常得 md 恰为 0 →
+  //    cci 输出 0；rolling 残差使 md 变成 ~1e-13 ≠ 0，cci 会翻成
+  //    (tp−ma)/(0.015·md) ≈ ±66.67 的纯噪声 —— 真实行情的平段上属实打实的
+  //    行为回归。收益（省一半内循环常数）配不上这个正确性代价，不改。
   for (let i = 0; i < data.length; i++) {
     if (i < period - 1) {
       result.push({ cci: null });
