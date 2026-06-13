@@ -50,6 +50,8 @@ export class CircuitBreaker {
   private failureCount: number = 0;
   private lastFailureTime: number = 0;
   private halfOpenSuccessCount: number = 0;
+  /** 半开状态下在途(已放行未出结果)的探测请求数 */
+  private halfOpenInFlight: number = 0;
 
   private readonly failureThreshold: number;
   private readonly resetTimeout: number;
@@ -82,9 +84,31 @@ export class CircuitBreaker {
         return true;
       case 'OPEN':
         return false;
-      case 'HALF_OPEN':
-        // 半开状态只允许有限的请求
-        return this.halfOpenSuccessCount < this.halfOpenRequests;
+      case 'HALF_OPEN': {
+        // 半开限流:在途探测 + 已成功 < 限额才放行,放行即预占一个在途名额。
+        // 此前仅看 halfOpenSuccessCount(只在探测完成后递增,达标即转 CLOSED),
+        // 该条件在 HALF_OPEN 内恒真 → 并发请求不限量轰击恢复中的上游。
+        // canRequest 在本状态有副作用(预占),与 recordSuccess / recordFailure /
+        // releaseProbe(外部取消)配对释放。
+        if (
+          this.halfOpenInFlight + this.halfOpenSuccessCount >=
+          this.halfOpenRequests
+        ) {
+          return false;
+        }
+        this.halfOpenInFlight++;
+        return true;
+      }
+    }
+  }
+
+  /**
+   * 释放一个半开探测名额:半开期被外部取消(ABORTED)的请求既非成功也非失败,
+   * 不调用会泄漏名额导致半开期拒绝后续探测。
+   */
+  releaseProbe(): void {
+    if (this.state === 'HALF_OPEN' && this.halfOpenInFlight > 0) {
+      this.halfOpenInFlight--;
     }
   }
 
@@ -95,6 +119,7 @@ export class CircuitBreaker {
     this.checkStateTransition();
 
     if (this.state === 'HALF_OPEN') {
+      if (this.halfOpenInFlight > 0) this.halfOpenInFlight--;
       this.halfOpenSuccessCount++;
       if (this.halfOpenSuccessCount >= this.halfOpenRequests) {
         // 探测成功，恢复正常
@@ -113,6 +138,7 @@ export class CircuitBreaker {
     this.lastFailureTime = Date.now();
 
     if (this.state === 'HALF_OPEN') {
+      if (this.halfOpenInFlight > 0) this.halfOpenInFlight--;
       // 探测失败，重新熔断
       this.transitionTo('OPEN');
     } else if (this.state === 'CLOSED') {
@@ -151,8 +177,10 @@ export class CircuitBreaker {
     if (newState === 'CLOSED') {
       this.failureCount = 0;
       this.halfOpenSuccessCount = 0;
+      this.halfOpenInFlight = 0;
     } else if (newState === 'HALF_OPEN') {
       this.halfOpenSuccessCount = 0;
+      this.halfOpenInFlight = 0;
     }
 
     // 触发回调
@@ -166,6 +194,7 @@ export class CircuitBreaker {
     this.transitionTo('CLOSED');
     this.failureCount = 0;
     this.halfOpenSuccessCount = 0;
+    this.halfOpenInFlight = 0;
     this.lastFailureTime = 0;
   }
 

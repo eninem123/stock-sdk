@@ -8,7 +8,8 @@
  * - 不引入第三方时区库 (SDK 零依赖),通过 `Intl.DateTimeFormat` 计算时区偏移。
  * - 兼容多种本地时间字符串格式 (yyyyMMddHHmmss / YYYY-MM-DD HH:mm:ss / YYYY-MM-DD HH:mm /
  *   YYYY-MM-DD / yyyyMMdd / HH:mm 配 baseDate)。
- * - 解析失败/输入为空时 `timestamp` 为 `NaN`,调用方可用 `Number.isNaN` 检测。
+ * - parseMarketTime 解析失败返回 `NaN`(内部中间值);对外 `TimeMeta.timestamp`
+ *   一律经 toNullableEpoch 归一为 `null`,消费方判 `=== null` 即可。
  */
 
 /**
@@ -249,8 +250,12 @@ export function parseMarketTime(local: string, tz: MarketTz): number {
  * @param local 市场本地时间字符串
  * @param tz    市场时区
  */
-/** 把 parseMarketTime 的 `NaN` 结果归一化为 `null`（v2：禁止手写 NaN） */
-function toNullableEpoch(ts: number): number | null {
+/**
+ * 把 parseMarketTime 的 `NaN` 结果归一化为 `null`（v2：对外契约禁止 NaN）。
+ * 所有直接调用 parseMarketTime 落 `timestamp` 字段的 parser 必须经由本函数
+ * （或 buildTimeMeta*），否则 NaN 会流进类型标注为 `number | null` 的字段。
+ */
+export function toNullableEpoch(ts: number): number | null {
   return Number.isNaN(ts) ? null : ts;
 }
 

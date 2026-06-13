@@ -216,7 +216,16 @@ async function nodeFetchJsVars<T extends object>(
         details: { timeout },
       });
     }
-    throw error;
+    if (error instanceof SdkError) {
+      throw error;
+    }
+    // 与 jsonp 同理:裸 fetch 路径非 abort 失败归一为 SdkError,不让原始 TypeError 逃逸
+    throw new SdkError({
+      code: 'NETWORK_ERROR',
+      message: `fetchJsVars failed: ${error instanceof Error ? error.message : String(error)}`,
+      url,
+      cause: error,
+    });
   } finally {
     clearTimeout(timer);
   }

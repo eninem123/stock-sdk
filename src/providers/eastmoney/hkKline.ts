@@ -10,6 +10,7 @@ import {
   assertMinutePeriod,
   assertAdjustType,
   parseMarketTime,
+  toNullableEpoch,
   formatInTz,
   getAdjustCode,
   toNumber,
@@ -115,7 +116,9 @@ export async function getHKMinuteKline(
     const epoch = parseMarketTime(timeStr, MARKET_TZ.CN);
     return {
       time: formatInTz(epoch, MARKET_TZ.HK) || timeStr,
-      timestamp: epoch,
+      // NaN→null 归一:本文件是全库仅有的两处绕过 buildTimeMeta 直落 timestamp
+      // 的调用,不归一会让 NaN 流进 `number | null` 字段(违反 v2 契约)
+      timestamp: toNullableEpoch(epoch),
     };
   };
 

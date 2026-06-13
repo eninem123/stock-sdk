@@ -605,6 +605,9 @@ export class RequestClient {
         const isExternalAbort = getSdkErrorCode(normalized) === 'ABORTED';
         if (!isExternalAbort) {
           this.fallbackManager.recordFailure(candidateUrl, normalized);
+        } else {
+          // 半开期被取消的请求要释放预占的探测名额(既非成功也非失败)
+          state.circuitBreaker?.releaseProbe();
         }
 
         const shouldTryNextHost =

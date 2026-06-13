@@ -85,7 +85,10 @@ function mapRow(row: string[]): FundDividend {
     equityRecordDate: parseDate(row[2]),
     exDividendDate: parseDate(row[3]),
     dividendPerShare: parseNumber(row[4]),
-    payDate: parseDate(row[5]),  };
+    payDate: parseDate(row[5]),
+    // v1 时代该列只能通过 raw[6] 获取;v2 删除 raw 后必须显式映射,否则数据不可达
+    dividendType: row[6]?.trim() ? row[6].trim() : null,
+  };
 }
 
 /** 拉取单页（不做客户端过滤、不做翻页聚合） */

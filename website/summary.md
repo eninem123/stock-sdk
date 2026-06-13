@@ -13,8 +13,8 @@
 
 | 文件 | 体积 | Gzip |
 | --- | --- | --- |
-| `dist/index.js` | 3.37 KB | 1.47 KB |
-| `dist/index.cjs` | 4.86 KB | 1.54 KB |
+| `dist/index.js` | 3.32 KB | 1.45 KB |
+| `dist/index.cjs` | 4.79 KB | 1.52 KB |
 
 ## 请求治理能力
 

@@ -169,6 +169,7 @@ export {
   type MarketTz,
   type TimeMeta,
   parseMarketTime,
+  toNullableEpoch,
   buildTimeMeta,
   buildTimeMetaFromDateAndTime,
   formatInTz,

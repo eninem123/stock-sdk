@@ -186,7 +186,17 @@ async function jsonpNode<T>(url: string, options: JsonpOptions): Promise<T> {
         details: { timeout },
       });
     }
-    throw error;
+    if (error instanceof SdkError) {
+      throw error;
+    }
+    // 裸 fetch 路径的非 abort 失败(ECONNREFUSED 'fetch failed' / 服务端断连
+    // 'terminated')此前以原始 TypeError 逃逸,破坏「对外只抛 SdkError」契约
+    throw new SdkError({
+      code: 'NETWORK_ERROR',
+      message: `JSONP request failed: ${error instanceof Error ? error.message : String(error)}`,
+      url,
+      cause: error,
+    });
   } finally {
     clearTimeout(timer);
   }
