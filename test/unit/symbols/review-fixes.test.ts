@@ -83,3 +83,109 @@ describe('PR#38 点分形式剥离冗余前缀(防双前缀)', () => {
     expect(normalizeSymbol('600519.SH')).toMatchObject({ exchange: 'SSE', code: '600519' });
   });
 });
+
+describe('F5 纯数字分支尊重显式 market:CN(不再被长度启发式强判港股)', () => {
+  it("normalizeSymbol('00700', {market:'CN'}) → CN（hint 形式）", () => {
+    expect(normalizeSymbol('00700', { market: 'CN' })).toMatchObject({
+      market: 'CN',
+      exchange: 'SZSE',
+      code: '00700',
+    });
+  });
+
+  it("normalizeSymbol({code:'01810', market:'CN'}) → CN（SymbolRef 形式）", () => {
+    expect(normalizeSymbol({ code: '01810', market: 'CN' }).market).toBe('CN');
+  });
+
+  it('4 位 + market:CN → CN', () => {
+    expect(normalizeSymbol('0001', { market: 'CN' }).market).toBe('CN');
+  });
+
+  it('显式 HK / US hint 与无 hint 默认行为不变', () => {
+    expect(normalizeSymbol('700', { market: 'HK' })).toMatchObject({
+      market: 'HK',
+      code: '00700',
+    });
+    expect(normalizeSymbol('00700')).toMatchObject({ market: 'HK', code: '00700' });
+    expect(normalizeSymbol('12345', { market: 'US' }).market).toBe('US');
+  });
+
+  it('6 位 + market:CN 照常', () => {
+    expect(normalizeSymbol('600519', { market: 'CN' })).toMatchObject({
+      market: 'CN',
+      exchange: 'SSE',
+    });
+  });
+});
+
+describe('F24 exchange hint 与解析结果矛盾时抛错(不再产出矛盾对象)', () => {
+  it("'600519' + {exchange:'HKEX'} → InvalidSymbolError", () => {
+    expect(() => normalizeSymbol('600519', { exchange: 'HKEX' })).toThrow(
+      InvalidSymbolError
+    );
+  });
+
+  it("'00700' + {exchange:'SSE'} → InvalidSymbolError", () => {
+    expect(() => normalizeSymbol('00700', { exchange: 'SSE' })).toThrow(
+      InvalidSymbolError
+    );
+  });
+
+  it('同市场内的 exchange 覆盖仍合法(AAPL + NASDAQ)', () => {
+    expect(normalizeSymbol('AAPL', { exchange: 'NASDAQ' })).toMatchObject({
+      market: 'US',
+      exchange: 'NASDAQ',
+    });
+  });
+
+  it('期货 exchange hint 直接确定市场(COMEX → GLOBAL,无需重复传 market)', () => {
+    expect(
+      normalizeSymbol('GC2412', { assetType: 'futures', exchange: 'COMEX' })
+    ).toMatchObject({ market: 'GLOBAL', exchange: 'COMEX', assetType: 'futures' });
+  });
+
+  it('期货 market 与 exchange 矛盾 → 抛错(CN + COMEX)', () => {
+    expect(() =>
+      normalizeSymbol('GC2412', {
+        market: 'CN',
+        assetType: 'futures',
+        exchange: 'COMEX',
+      })
+    ).toThrow(InvalidSymbolError);
+  });
+});
+
+describe('F25 secid 分支剥离冗余前缀 + 前缀/解析矛盾检测', () => {
+  it("'1.sh600519' → code 600519（修复 PR#38 同款问题的隔壁分支）", () => {
+    const ns = normalizeSymbol('1.sh600519');
+    expect(ns).toMatchObject({ market: 'CN', exchange: 'SSE', code: '600519' });
+    expect(toTencentSymbol(ns)).toBe('sh600519');
+  });
+
+  it("'0.sz000001' → code 000001", () => {
+    expect(normalizeSymbol('0.sz000001').code).toBe('000001');
+  });
+
+  it("'1.sz000001' 前缀与 secid 矛盾 → InvalidSymbolError", () => {
+    expect(() => normalizeSymbol('1.sz000001')).toThrow(InvalidSymbolError);
+  });
+
+  it("'hk00700.SZ' 前缀与后缀矛盾 → InvalidSymbolError（不再静默剥成 CN）", () => {
+    expect(() => normalizeSymbol('hk00700.SZ')).toThrow(InvalidSymbolError);
+  });
+
+  it("'sh600519.SZ' 交易所级矛盾 → InvalidSymbolError", () => {
+    expect(() => normalizeSymbol('sh600519.SZ')).toThrow(InvalidSymbolError);
+  });
+
+  it("'hk00700.HK' 一致 → 正常剥离", () => {
+    expect(normalizeSymbol('hk00700.HK')).toMatchObject({
+      market: 'HK',
+      code: '00700',
+    });
+  });
+
+  it("'SHW.US' 字母 ticker 不被当前缀剥离", () => {
+    expect(normalizeSymbol('SHW.US').code).toBe('SHW');
+  });
+});

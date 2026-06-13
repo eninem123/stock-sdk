@@ -5,12 +5,15 @@
  *  1) 点分形式：东财 secid（1.600519 / 116.00700 / 105.AAPL）、后缀（600519.SH）、
  *     期货交易所（CFFEX.IF2412）、板块（90.BK0475）
  *  2) 字母前缀：sh / sz / bj / hk / us
- *  3) 纯数字：6 位→CN（按首位推断交易所）、5/4 位→HK（补零到 5 位）
+ *  3) 纯数字：显式 market hint 优先（CN/HK/US 均可强制），无 hint 时
+ *     6 位→CN（按首位推断交易所）、5/4 位→HK（补零到 5 位）
  *  4) 带 hint 的期货裸合约
  *  5) 纯字母→US
  *  6) 失败抛 InvalidSymbolError
  *
- * `hint` 与 `SymbolRef` 字段冲突时，显式入参（SymbolRef）优先。
+ * `hint` 与 `SymbolRef` 字段冲突时，显式入参（SymbolRef）优先；
+ * 显式 hint（market/exchange）与符号本身解析结果矛盾时抛 InvalidSymbolError，
+ * 不静默选边产出 market/exchange 自相矛盾的结果。
  */
 import { InvalidSymbolError } from '../core/errors';
 import type {
@@ -51,6 +54,48 @@ const SECID_MAP: Record<string, { market: Market; exchange: Exchange }> = {
   '107': { market: 'US', exchange: 'AMEX' },
 };
 
+/** 交易所 → 所属市场（校验 exchange hint 与解析结果是否矛盾；未知交易所不校验） */
+const EXCHANGE_MARKET: Partial<Record<Exchange, Market>> = {
+  SSE: 'CN',
+  SZSE: 'CN',
+  BSE: 'CN',
+  HKEX: 'HK',
+  NASDAQ: 'US',
+  NYSE: 'US',
+  AMEX: 'US',
+  US: 'US',
+  ...Object.fromEntries(
+    Object.values(FUTURES_EXCHANGES).map((fx) => [fx.exchange, fx.market])
+  ),
+};
+
+/**
+ * 点分形式中剥离与已解析市场冗余的字母前缀（'sh600519.SH' / '1.sh600519' → '600519'）。
+ * 仅当前缀后是纯数字才视为前缀 —— 'SHW.US' / 'USB.US' 等真实字母 ticker 不受影响；
+ * 前缀与解析出的市场/交易所矛盾时抛 InvalidSymbolError（如 'hk00700.SZ'、'1.sz000001'），
+ * 不静默选边返回错误标的。
+ */
+function stripRedundantPrefix(
+  part: string,
+  resolved: { market: Market; exchange: Exchange },
+  rawInput: string
+): string {
+  const lower = part.toLowerCase();
+  for (const p of PREFIXES) {
+    if (!lower.startsWith(p) || part.length <= p.length) continue;
+    const rest = part.slice(p.length);
+    if (!/^\d+$/.test(rest)) continue;
+    const pm = PREFIX_MAP[p];
+    if (pm.market !== resolved.market || pm.exchange !== resolved.exchange) {
+      throw new InvalidSymbolError(
+        `${rawInput} (prefix '${p}' conflicts with resolved ${resolved.market}/${resolved.exchange})`
+      );
+    }
+    return rest;
+  }
+  return part;
+}
+
 export function normalizeSymbol(
   input: SymbolInput,
   hint?: Partial<SymbolRef>
@@ -74,14 +119,28 @@ export function normalizeSymbol(
     code: string,
     assetType: AssetType,
     variety?: string
-  ): NormalizedSymbol => ({
-    market,
-    exchange: hintExchange ?? exchange,
-    assetType: hintAsset ?? assetType,
-    code,
-    variety,
-    input: rawInput,
-  });
+  ): NormalizedSymbol => {
+    // exchange hint 与解析出的 market 矛盾时拒绝（如 '600519' + {exchange:'HKEX'}）。
+    // 否则会产出 market/exchange 自相矛盾的对象：toTencentSymbol 抛错而
+    // toEastmoneySecid 拼出错误标的（116.600519）—— 与 N1 修 market 时同类问题，
+    // exchange 这扇门此前没堵上。
+    if (hintExchange) {
+      const owner = EXCHANGE_MARKET[hintExchange];
+      if (owner && owner !== market) {
+        throw new InvalidSymbolError(
+          `${rawInput} (exchange hint '${hintExchange}' belongs to market ${owner}, conflicts with resolved market ${market})`
+        );
+      }
+    }
+    return {
+      market,
+      exchange: hintExchange ?? exchange,
+      assetType: hintAsset ?? assetType,
+      code,
+      variety,
+      input: rawInput,
+    };
+  };
 
   // 1) 点分形式
   if (code0.includes('.')) {
@@ -93,21 +152,13 @@ export function normalizeSymbol(
 
     if (/^\d+$/.test(left) && SECID_MAP[left]) {
       const s = SECID_MAP[left];
-      return finish(s.market, s.exchange, right, 'stock');
+      // secid 分支同样剥离冗余前缀：'1.sh600519' 的 code 应为 '600519'，
+      // 否则 toTencentSymbol 拼成 'shsh600519'（与 SUFFIX 分支同款问题）。
+      return finish(s.market, s.exchange, stripRedundantPrefix(right, s, rawInput), 'stock');
     }
     if (SUFFIX_MAP[upperRight]) {
       const s = SUFFIX_MAP[upperRight];
-      // 剥离 left 可能的冗余前缀:'sh600519.SH' 的 code 应为 '600519' 而非 'sh600519'，
-      // 否则下游 toTencentSymbol 会拼成 'shsh600519'。
-      let cleanLeft = left;
-      const lowerLeft = left.toLowerCase();
-      for (const p of PREFIXES) {
-        if (lowerLeft.startsWith(p) && left.length > p.length) {
-          cleanLeft = left.slice(p.length);
-          break;
-        }
-      }
-      return finish(s.market, s.exchange, cleanLeft, 'stock');
+      return finish(s.market, s.exchange, stripRedundantPrefix(left, s, rawInput), 'stock');
     }
     if (FUTURES_EXCHANGES[upperLeft]) {
       const fx = FUTURES_EXCHANGES[upperLeft];
@@ -140,10 +191,15 @@ export function normalizeSymbol(
     }
   }
 
-  // 3) 纯数字
+  // 3) 纯数字：显式 market hint 优先于长度启发式 ——
+  //    {market:'CN'} 时 4/5 位代码不再被强判为港股（修复前 aShareKline/fundFlow
+  //    内部以 {market:'CN'} + 用户输入调用，传 '00700' 会静默拿到港股数据）。
   if (/^\d+$/.test(code0)) {
     if (hintMarket === 'US') {
       return finish('US', 'US', code0, 'stock');
+    }
+    if (hintMarket === 'CN') {
+      return finish('CN', inferAShareExchange(code0), code0, 'stock');
     }
     if (hintMarket === 'HK' || code0.length === 5 || code0.length === 4) {
       return finish('HK', 'HKEX', code0.padStart(5, '0'), 'stock');
@@ -164,8 +220,12 @@ export function normalizeSymbol(
         `${rawInput} (GLOBAL futures require an explicit exchange, e.g. { exchange: 'COMEX' })`
       );
     }
+    // exchange hint 可直接确定市场（COMEX→GLOBAL），无需用户重复传 market
+    const exchangeMarket = futExchange
+      ? FUTURES_EXCHANGES[String(futExchange).toUpperCase()]?.market
+      : undefined;
     return finish(
-      hintMarket ?? 'CN',
+      hintMarket ?? exchangeMarket ?? 'CN',
       futExchange ?? 'SHFE',
       code0.toUpperCase(),
       'futures',
