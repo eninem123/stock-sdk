@@ -214,8 +214,10 @@ export function clearSharedCaches(): void {
  * 生成缓存键的辅助函数
  */
 export function createCacheKey(...parts: (string | number | boolean | undefined | null)[]): string {
+  // F49: undefined/null 以固定占位符保位,不再静默丢弃 ——
+  // 否则 ('q', undefined, 'hk') 与 ('q', 'hk') 撞 key,可选中间参数的
+  // 调用方会拿到串味的缓存(本函数从包根导出,外部组合 key 是公开用法)。
   return parts
-    .filter((p) => p !== undefined && p !== null)
-    .map(String)
+    .map((p) => (p === undefined || p === null ? '\u2205' : String(p)))
     .join(':');
 }

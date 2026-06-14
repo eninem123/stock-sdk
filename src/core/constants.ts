@@ -15,9 +15,6 @@ export const FUND_LIST_URL = 'https://assets.linkdiary.cn/shares/fund_list';
 // A 股交易日历
 export const TRADE_CALENDAR_URL = 'https://assets.linkdiary.cn/shares/trade-data-list.txt';
 
-/** @deprecated 使用 A_SHARE_LIST_URL 代替 */
-export const CODE_LIST_URL = A_SHARE_LIST_URL;
-
 // 东方财富 API
 export const EM_KLINE_URL = 'https://push2his.eastmoney.com/api/qt/stock/kline/get';
 export const EM_TRENDS_URL = 'https://push2his.eastmoney.com/api/qt/stock/trends2/get';
@@ -144,8 +141,6 @@ export const SINA_SSE_OPTION_5DAY_URL =
 // 东方财富期权 API
 export const EM_OPTION_CFFEX_URL = 'https://futsseapi.eastmoney.com/list/option/221';
 export const EM_OPTION_LHB_URL = 'https://datacenter-web.eastmoney.com/api/data/get';
-/** @deprecated 使用 {@link EM_DATA_TOKEN} 代替（值相同） */
-export const EM_OPTION_LHB_TOKEN = 'b2884a393a59ad64002292a3e90d46a5';
 
 /**
  * 中金所股指期权品种 -> product 代码映射

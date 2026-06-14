@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decodeGBK, parseResponse, safeNumber, safeNumberOrNull } from '../../../src/utils';
+import { decodeGBK, parseResponse, safeNumber, safeNumberOrNull } from '../../../src/core';
 import { toNumber, toFiniteNumberOrNull } from '../../../src/core/parser';
 
 describe('core parser utilities', () => {

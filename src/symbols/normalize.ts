@@ -27,6 +27,13 @@ import type {
 import { inferAShareExchange } from './infer';
 import { FUTURES_EXCHANGES, extractVariety } from './futures';
 
+/**
+ * 市场字母标记 → { market, exchange }(F47: 单一来源)。
+ * 前缀(sh600519)与后缀(600519.SH)共用同一组映射 —— 此前 PREFIX_MAP /
+ * PREFIXES / SUFFIX_MAP 三处编码同一组数据,新增市场要三处同步。
+ * 前缀查询用小写、后缀查询统一 toLowerCase 后查同一张表;
+ * PREFIXES 由键派生(Object.keys 保插入序,stripRedundantPrefix 依赖该序)。
+ */
 const PREFIX_MAP: Record<string, { market: Market; exchange: Exchange }> = {
   sh: { market: 'CN', exchange: 'SSE' },
   sz: { market: 'CN', exchange: 'SZSE' },
@@ -34,15 +41,7 @@ const PREFIX_MAP: Record<string, { market: Market; exchange: Exchange }> = {
   hk: { market: 'HK', exchange: 'HKEX' },
   us: { market: 'US', exchange: 'US' },
 };
-const PREFIXES = ['sh', 'sz', 'bj', 'hk', 'us'] as const;
-
-const SUFFIX_MAP: Record<string, { market: Market; exchange: Exchange }> = {
-  SH: { market: 'CN', exchange: 'SSE' },
-  SZ: { market: 'CN', exchange: 'SZSE' },
-  BJ: { market: 'CN', exchange: 'BSE' },
-  HK: { market: 'HK', exchange: 'HKEX' },
-  US: { market: 'US', exchange: 'US' },
-};
+const PREFIXES = Object.keys(PREFIX_MAP);
 
 /** 东财 secid 数字市场前缀 → { market, exchange } */
 const SECID_MAP: Record<string, { market: Market; exchange: Exchange }> = {
@@ -156,9 +155,9 @@ export function normalizeSymbol(
       // 否则 toTencentSymbol 拼成 'shsh600519'（与 SUFFIX 分支同款问题）。
       return finish(s.market, s.exchange, stripRedundantPrefix(right, s, rawInput), 'stock');
     }
-    if (SUFFIX_MAP[upperRight]) {
-      const s = SUFFIX_MAP[upperRight];
-      return finish(s.market, s.exchange, stripRedundantPrefix(left, s, rawInput), 'stock');
+    const suffix = PREFIX_MAP[right.toLowerCase()];
+    if (suffix) {
+      return finish(suffix.market, suffix.exchange, stripRedundantPrefix(left, suffix, rawInput), 'stock');
     }
     if (FUTURES_EXCHANGES[upperLeft]) {
       const fx = FUTURES_EXCHANGES[upperLeft];

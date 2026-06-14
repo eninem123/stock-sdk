@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { chunkArray, asyncPool } from '../../../src/utils';
+import { chunkArray, asyncPool } from '../../../src/core';
 import { getPeriodCode, getAdjustCode } from '../../../src/core';
 
 describe('core utils', () => {

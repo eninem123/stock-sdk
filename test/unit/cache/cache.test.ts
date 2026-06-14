@@ -25,7 +25,7 @@ describe('MemoryCacheStore', () => {
 
 describe('createCacheKey', () => {
   it('joins parts and skips null/undefined', () => {
-    expect(createCacheKey('codes', 'cn', undefined, 'kc')).toBe('codes:cn:kc');
+    expect(createCacheKey('codes', 'cn', undefined, 'kc')).toBe('codes:cn:\u2205:kc');
   });
 });
 
