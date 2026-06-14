@@ -3,7 +3,7 @@
  *
  * 见 mcp.md §2：stdout 只输出协议消息，所有日志走 stderr，否则污染协议流。
  */
-import type { JsonRpcResponse } from './protocol';
+import { RPC_INVALID_REQUEST, type JsonRpcResponse } from './protocol';
 
 /** 结构化日志到 stderr（绝不写 stdout） */
 export function logStderr(...args: unknown[]): void {
@@ -25,6 +25,11 @@ export const MAX_LINE_BYTES = 1_000_000;
  */
 export function createLineReader(onLine: (line: string) => void): void {
   let buf = '';
+  // 超长消息「丢弃模式」：stdin 按 ~64KB 分片到达，超上限的单行必然被腰斩。
+  // 旧实现直接清 buf：原请求永远没有任何响应（client 悬挂到超时），且该消息的
+  // 尾部分片会被误析成独立行 → 伪 id:null Parse error。改为持续丢弃到下一个
+  // 换行（消息真正结束），再回一条 message-too-large 错误让 client 感知失败。
+  let discarding = false;
   process.stdin.setEncoding('utf8');
   process.stdin.on('data', (chunk: string) => {
     buf += chunk;
@@ -32,11 +37,27 @@ export function createLineReader(onLine: (line: string) => void): void {
     while (idx >= 0) {
       const line = buf.slice(0, idx);
       buf = buf.slice(idx + 1);
-      if (line.trim()) onLine(line);
+      if (discarding) {
+        // 该行是被截断消息的尾部：丢弃并答复（无法定位 id，只能回 null）
+        discarding = false;
+        writeMessage({
+          jsonrpc: '2.0',
+          id: null,
+          error: {
+            code: RPC_INVALID_REQUEST,
+            message: `Message too large (limit ${MAX_LINE_BYTES} bytes)`,
+          },
+        });
+      } else if (line.trim()) {
+        onLine(line);
+      }
       idx = buf.indexOf('\n');
     }
-    if (buf.length > MAX_LINE_BYTES) {
-      logStderr(`[stock-sdk mcp] 丢弃超长输入（${buf.length} bytes 无换行，超 ${MAX_LINE_BYTES} 上限）`);
+    if (!discarding && buf.length > MAX_LINE_BYTES) {
+      logStderr(`[stock-sdk mcp] 输入超长（${buf.length} bytes 无换行，超 ${MAX_LINE_BYTES} 上限），丢弃至下一换行`);
+      discarding = true;
+      buf = '';
+    } else if (discarding) {
       buf = '';
     }
   });

@@ -56,7 +56,10 @@ export interface FundDividend {
   /** 分红金额（元/份），无则 `null` */
   dividendPerShare: number | null;
   /** 分红发放日（`YYYY-MM-DD`），无则 `null` */
-  payDate: string | null;}
+  payDate: string | null;
+  /** 分红类型代码（接口第 7 列原始口径，如拆分/派现的类型标识），无则 `null` */
+  dividendType: string | null;
+}
 
 /** 基金分红查询结果 */
 export interface FundDividendListResult {

@@ -5,7 +5,7 @@
 ## 项目定位
 
 - 包名：`stock-sdk`
-- 当前版本：`2.0.0-beta.0`
+- 当前版本：`2.0.0-beta.1`
 - 定位：面向前端与 Node.js 的股票行情 SDK，支持多市场行情、K 线、指标、期货、期权和 AI / MCP 集成
 - 核心卖点：零依赖 | Browser + Node.js | 轻量发布包 | 完整 TypeScript 类型
 
@@ -13,8 +13,8 @@
 
 | 文件 | 体积 | Gzip |
 | --- | --- | --- |
-| `dist/index.js` | 3.37 KB | 1.47 KB |
-| `dist/index.cjs` | 4.86 KB | 1.54 KB |
+| `dist/index.js` | 3.53 KB | 1.61 KB |
+| `dist/index.cjs` | 5.06 KB | 1.70 KB |
 
 ## 请求治理能力
 
@@ -29,9 +29,9 @@
 | `rotateUserAgent` | `boolean` | 仅 Node.js 生效，自动轮换常见 UA 以降低频控概率。 |
 | `circuitBreaker` | `CircuitBreakerOptions` | 全局熔断器配置，连续失败后短暂停止请求。 |
 | `providerPolicies` | `Partial<Record<ProviderName, ProviderRequestPolicy>>` | 按 provider 单独覆盖超时、重试、限流、熔断和请求头策略。 |
-| `fetchImpl` | `unknown` | 待补充说明。 |
-| `signal` | `unknown` | 待补充说明。 |
-| `hooks` | `unknown` | 待补充说明。 |
+| `fetchImpl` | `FetchImpl` | 可注入的自定义 fetch 实现（代理 / mock / 日志），默认运行时全局 fetch。 |
+| `signal` | `AbortSignal` | client 级外部取消信号；触发后该实例全部在途请求归类为 ABORTED。 |
+| `hooks` | `RequestHooks` | 请求生命周期钩子（onRequest/onResponse/onError/onRetry/trace），回调抛错不影响主流程。 |
 
 ### Provider 策略覆盖
 
@@ -50,110 +50,121 @@
 
 ### 实时行情
 
-- `getFullQuotes`
-- `getSimpleQuotes`
-- `getHKQuotes`
-- `getUSQuotes`
-- `getFundQuotes`
+- `quotes.cn`
+- `quotes.cnSimple`
+- `quotes.hk`
+- `quotes.us`
+- `quotes.fund`
 
 ### K 线与分时
 
-- `getHistoryKline`
-- `getHKHistoryKline`
-- `getUSHistoryKline`
-- `getMinuteKline`
-- `getTodayTimeline`
-- `getKlineWithIndicators`
+- `kline.cn`
+- `kline.hk`
+- `kline.us`
+- `kline.cnMinute`
+- `kline.hkMinute`
+- `kline.usMinute`
+- `quotes.timeline`
+- `kline.withIndicators`
 
 ### 板块与扩展数据
 
-- `getIndustryList`
-- `getIndustrySpot`
-- `getIndustryConstituents`
-- `getIndustryKline`
-- `getConceptList`
-- `getConceptSpot`
-- `getConceptConstituents`
-- `getConceptKline`
-- `getFundFlow`
-- `getPanelLargeOrder`
+- `board.industry.list`
+- `board.industry.spot`
+- `board.industry.constituents`
+- `board.industry.kline`
+- `board.industry.minuteKline`
+- `board.concept.list`
+- `board.concept.spot`
+- `board.concept.constituents`
+- `board.concept.kline`
+- `board.concept.minuteKline`
+- `quotes.fundFlow`
+- `quotes.largeOrder`
 - `search`
-- `getTradingCalendar`
-- `isTradingDay`
-- `nextTradingDay`
-- `prevTradingDay`
-- `getMarketStatus`
-- `getDividendDetail`
+- `reference.tradingCalendar`
+- `calendar.isTradingDay`
+- `calendar.nextTradingDay`
+- `calendar.prevTradingDay`
+- `calendar.marketStatus`
+- `reference.dividendDetail`
 
 ### 期货与期权
 
-- `getFuturesKline`
-- `getGlobalFuturesSpot`
-- `getGlobalFuturesKline`
-- `getFuturesInventorySymbols`
-- `getFuturesInventory`
-- `getComexInventory`
-- `getIndexOptionSpot`
-- `getIndexOptionKline`
-- `getCFFEXOptionQuotes`
-- `getETFOptionMonths`
-- `getETFOptionExpireDay`
-- `getETFOptionMinute`
-- `getETFOptionDailyKline`
-- `getETFOption5DayMinute`
-- `getCommodityOptionSpot`
-- `getCommodityOptionKline`
-- `getOptionLHB`
+- `futures.kline`
+- `futures.globalSpot`
+- `futures.globalKline`
+- `futures.inventorySymbols`
+- `futures.inventory`
+- `futures.comexInventory`
+- `options.index.spot`
+- `options.index.kline`
+- `options.cffex.quotes`
+- `options.etf.months`
+- `options.etf.expireDay`
+- `options.etf.minute`
+- `options.etf.dailyKline`
+- `options.etf.fiveDayMinute`
+- `options.commodity.spot`
+- `options.commodity.kline`
+- `options.lhb`
 
 ### 批量与代码列表
 
-- `getAShareCodeList`
-- `getUSCodeList`
-- `getHKCodeList`
-- `getFundCodeList`
-- `getAllAShareQuotes`
-- `getAllHKShareQuotes`
-- `getAllUSShareQuotes`
-- `getAllQuotesByCodes`
-- `batchRaw`
+- `codes.cn`
+- `codes.us`
+- `codes.hk`
+- `codes.fund`
+- `batch.cn`
+- `batch.hk`
+- `batch.us`
+- `batch.byCodes`
+- `batch.raw`
 
 ### 资金流向（深度）
 
-- `getIndividualFundFlow`
-- `getMarketFundFlow`
-- `getFundFlowRank`
-- `getSectorFundFlowRank`
-- `getSectorFundFlowHistory`
+- `fundFlow.individual`
+- `fundFlow.market`
+- `fundFlow.rank`
+- `fundFlow.sectorRank`
+- `fundFlow.sectorHistory`
 
 ### 沪深港通 / 北向资金
 
-- `getNorthboundMinute`
-- `getNorthboundFlowSummary`
-- `getNorthboundHoldingRank`
-- `getNorthboundHistory`
-- `getNorthboundIndividual`
+- `northbound.minute`
+- `northbound.summary`
+- `northbound.holdingRank`
+- `northbound.history`
+- `northbound.individual`
 
 ### 涨停板 / 盘口异动
 
-- `getZTPool`
-- `getStockChanges`
-- `getBoardChanges`
+- `marketEvent.ztPool`
+- `marketEvent.stockChanges`
+- `marketEvent.boardChanges`
 
 ### 龙虎榜
 
-- `getDragonTigerDetail`
-- `getDragonTigerStockStats`
-- `getDragonTigerInstitution`
-- `getDragonTigerBranchRank`
-- `getDragonTigerStockSeatDetail`
+- `dragonTiger.detail`
+- `dragonTiger.stockStats`
+- `dragonTiger.institution`
+- `dragonTiger.branchRank`
+- `dragonTiger.seatDetail`
 
 ### 大宗交易 / 融资融券
 
-- `getBlockTradeMarketStat`
-- `getBlockTradeDetail`
-- `getBlockTradeDailyStat`
-- `getMarginAccountInfo`
-- `getMarginTargetList`
+- `blockTrade.marketStat`
+- `blockTrade.detail`
+- `blockTrade.dailyStat`
+- `margin.accountInfo`
+- `margin.targetList`
+
+### 基金深度数据
+
+- `fund.dividendList`
+- `fund.navHistory`
+- `fund.estimate`
+- `fund.rankHistory`
 
 ## 相关页面
 

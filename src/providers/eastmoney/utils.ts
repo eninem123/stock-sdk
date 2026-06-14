@@ -1,7 +1,84 @@
 /**
  * 东方财富 - 通用工具函数
  */
-import { RequestClient } from '../../core';
+import { RequestClient, addDays } from '../../core';
+
+/**
+ * 把 YYYYMMDD 转为 YYYY-MM-DD（datacenter filter 要求横线格式）。
+ * 其它格式原样返回。dragonTiger/blockTrade/northbound/futuresInventory 共用：
+ * CLI help 文档的日期格式是 YYYYMMDD，若不归一直接插进
+ * `(TRADE_DATE>='...')` 过滤式，字典序比较会把所有行排除（静默空结果）。
+ */
+export function toIsoDate(date: string): string {
+  if (/^\d{8}$/.test(date)) {
+    return `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`;
+  }
+  return date;
+}
+
+/**
+ * 把分钟K线的 startDate/endDate 归一成可与行时间（'YYYY-MM-DD HH:mm'）
+ * 做字符串比较的窗口：
+ * - 'YYYYMMDD'（8 位）补横线 —— 否则 '20250601' 在 index 4 处 '0' > '-'，
+ *   会把所有行整天误过滤成空结果
+ * - 仅日期（10 位）的 end 补 ' 23:59' —— 否则 'YYYY-MM-DD HH:mm' > 'YYYY-MM-DD'
+ *   同样整天误过滤
+ * - 'YYYY-MM-DDTHH:mm' 的 'T' 归一为空格，并截到分钟精度
+ */
+export function normalizeMinuteWindow(
+  startDate: string,
+  endDate: string
+): { start: string; end: string } {
+  // 8 位转横线复用 toIsoDate(P3-13:同文件此前内联了一份逐字相同的转换)
+  const norm = (v: string): string =>
+    toIsoDate(v.replace('T', ' ').trim()).slice(0, 16);
+  const start = norm(startDate);
+  let end = norm(endDate);
+  if (end.length === 10) end += ' 23:59';
+  return { start, end };
+}
+
+/**
+ * F34:把分钟K线(5/15/30/60)的 startDate/endDate【日期部分】下推为
+ * kline/get 端点的 beg/end(YYYYMMDD),让服务端先按天裁剪。
+ *
+ * 此前该分支硬编码 `beg=0&end=20500000` 全量下载数年分钟历史(查 1 天也要
+ * 拉数百 KB,并对每行跑 CSV 解析 + 时间换算)再本地丢弃;同端点的日 K 路径
+ * (getHistoryKline)已证明 beg/end 可做服务端裁剪。
+ *
+ * - 兼容 'YYYY-MM-DD HH:mm' / 'YYYY-MM-DDTHH:mm' / 'YYYY-MM-DD' / 'YYYYMMDD'
+ *   等形式:仅提取日期部分并去横线
+ * - 未传或无法识别的格式保留全量窗口('0' / '20500000'),与历史行为一致
+ * - 这里只做"天"级裁剪(服务端窗口必须是目标数据的超集),
+ *   HH:mm 精度仍由调用方的 normalizeMinuteWindow 本地过滤保证
+ * - `endExtraDays`:上游 beg/end 按【北京时间】日期裁剪,而 startDate/endDate
+ *   语义是市场本地时区。美股(UTC-4/-5)的下午盘对应北京时间次日凌晨,
+ *   end 若取本地日期当天会把这些行裁掉,故美股调用方需传 1(详见 usKline.ts);
+ *   beg 无此问题 —— 北京时间恒早于/等于西半球本地时间,本地日期 D 的行
+ *   其北京日期只会 >= D,beg=D 不会漏数据
+ */
+export function resolveMinuteBegEnd(
+  startDate: string | undefined,
+  endDate: string | undefined,
+  endExtraDays = 0
+): { beg: string; end: string } {
+  const toCompactDay = (value?: string): string | undefined => {
+    if (!value) return undefined;
+    const m = /^(\d{4})-?(\d{2})-?(\d{2})/.exec(value.trim());
+    return m ? `${m[1]}${m[2]}${m[3]}` : undefined;
+  };
+
+  const beg = toCompactDay(startDate) ?? '0';
+  let end = toCompactDay(endDate);
+  if (end !== undefined && endExtraDays > 0) {
+    // 日历日加法收编到 core/time.addDays(P3-13:此前与 indicatorService 各持一份)
+    end = addDays(
+      `${end.slice(0, 4)}-${end.slice(4, 6)}-${end.slice(6, 8)}`,
+      endExtraDays
+    ).replace(/-/g, '');
+  }
+  return { beg, end: end ?? '20500000' };
+}
 
 /**
  * 分页获取数据

@@ -69,7 +69,9 @@ export function calcATR(
     }
 
     if (i === period - 1) {
-      // 第一个 ATR：使用简单平均
+      // 第一个 ATR：使用简单平均。
+      // F36: 不改 —— 这个扫窗只在 i === period-1 执行一次（整次调用 O(period)），
+      // 后续全部走 Wilder O(1) 递推，整体已是 O(n)，rolling 化无意义。
       let sum = 0;
       let count = 0;
       for (let j = 0; j < period; j++) {

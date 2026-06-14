@@ -164,17 +164,20 @@ export function calcDMI(data: OHLCV[], options: DMIOptions = {}): DMIResult[] {
   // 因此第 i 根的 DX 是 dx[i-1]。真实 DX 从 dx[period-1] 开始，dx[0..period-2] 是占位 0。
   // 原实现用 dx[i-period+1]（比 dx[i-1] 早 period-2 位）做种子，会把一堆占位 0 平均进初始 ADX。
   let adxSum = 0;
-  let adxCount = 0;
   let prevAdx = 0;
 
+  // 种子窗口按 adxPeriod 取:首个真实 DX 是 dx[period-1](对应 i=period),
+  // 累加 adxPeriod 个后在 i = period + adxPeriod - 1 取简单平均作初始 ADX。
+  // 此前窗口边界写死为 period(恰好累加 period 个值)却除以 adxPeriod ——
+  // adxPeriod ≠ period 时种子错误并经 Wilder 递推扩散(默认两者相等时无差异)。
+  const seedIndex = period + adxPeriod - 1;
   for (let i = period; i < data.length; i++) {
-    if (i < period * 2 - 1) {
+    if (i < seedIndex) {
       adxSum += dx[i - 1] || 0;
-      adxCount++;
       continue;
     }
 
-    if (i === period * 2 - 1) {
+    if (i === seedIndex) {
       // 初始 ADX 使用简单平均
       adxSum += dx[i - 1] || 0;
       prevAdx = adxSum / adxPeriod;
@@ -187,8 +190,8 @@ export function calcDMI(data: OHLCV[], options: DMIOptions = {}): DMIResult[] {
     }
   }
 
-  // 计算 ADXR
-  for (let i = period * 2 - 1 + adxPeriod; i < data.length; i++) {
+  // 计算 ADXR(首个可比位置随种子位置平移)
+  for (let i = seedIndex + adxPeriod; i < data.length; i++) {
     const currentAdx = results[i].adx;
     const prevAdxValue = results[i - adxPeriod]?.adx;
     if (currentAdx !== null && prevAdxValue !== null) {

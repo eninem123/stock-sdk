@@ -1,34 +1,72 @@
-# Playground
+---
+layout: page
+title: 演练场
+---
 
-在浏览器里直接调用 stock-sdk v2、即时查看返回结果的交互演示区。
+<script setup>
+import Playground from '../.vitepress/theme/components/Playground.vue'
+import { onMounted, onUnmounted } from 'vue'
 
-## 即将上线
+// 动态添加 body 类名，用于限定页面级样式作用范围
+onMounted(() => {
+  document.body.classList.add('playground-page')
+})
 
-Playground 正在随 v2 SDK 的实现一起接通。v1 文档站已有一套按方法分类的交互组件（16 个分类、可在线编辑参数并运行），它们会迁移到 v2 站，并把所有调用从 v1 的扁平写法改成 **命名空间调用**：
+onUnmounted(() => {
+  document.body.classList.remove('playground-page')
+})
+</script>
 
-```ts
-// v1（旧）
-const [quote] = await sdk.getFullQuotes(['sh600519'])
+<Playground />
 
-// v2（Playground 将采用的写法）
-const [quote] = await sdk.quotes.cn(['sh600519'])
-```
+<style>
+/* ===== Playground 页面专属样式（body.playground-page 限定作用范围） ===== */
 
-接通后，你可以在页面里：
+/* 全宽展示，去掉文档页内边距 */
+body.playground-page .VPDoc {
+  padding: 0 !important;
+}
 
-- 选择命名空间与方法（`sdk.quotes.cn` / `sdk.kline.cn` / `sdk.options.etf.dailyKline` …）
-- 编辑符号与参数，符号支持 `string` 容错解析（`sh600519` / `600519` / `00700` / `AAPL` 均可）
-- 一键运行，查看符合 v2 数据契约的返回结构（统一 `Quote` 联合、最小计价单位、`timestamp: number | null`）
+body.playground-page .VPDoc .container {
+  max-width: 100% !important;
+}
 
-> 状态：待 v2 SDK 实现完成后接通。届时本页会替换为真正的交互组件，无需改动链接。
+body.playground-page .VPDoc .content {
+  padding: 0 !important;
+}
 
-## 先从这里开始
+body.playground-page .vp-doc {
+  padding: 0 !important;
+}
 
-在 Playground 上线前，可以照着文档里的可读示例自己跑：
+/* 隐藏侧边栏 */
+body.playground-page .VPSidebar {
+  display: none !important;
+}
 
-- [快速开始](/guide/getting-started) —— 10 行命名空间 demo,带你跑通第一个调用
-- [安装](/guide/installation) —— npm / yarn / pnpm、subpath 导入(`stock-sdk/indicators`、`/signals`、`/symbols`)
-- [API 总览](/api/) —— 命名空间地图与每个方法的签名、参数、返回说明
-- [符号与代码规则](/guide/symbols) —— `string` 与 `SymbolRef`、`normalizeSymbol` 容错解析
+body.playground-page .VPContent.has-sidebar {
+  padding-left: 0 !important;
+}
 
-文档中的每个代码块都是可直接复制运行的命名空间写法,Playground 接通后只是把它们搬进浏览器、配上即时运行而已。
+/* 导航栏撑满宽度 */
+body.playground-page .VPNavBar .wrapper {
+  max-width: 100% !important;
+  padding-left: 24px !important;
+  padding-right: 24px !important;
+}
+
+body.playground-page .VPNavBar .container {
+  max-width: 100% !important;
+}
+
+/* 隐藏页面底部 footer */
+body.playground-page .VPFooter,
+body.playground-page footer {
+  display: none !important;
+}
+
+/* 防止页面整体滚动 */
+body.playground-page .VPContent {
+  overflow: hidden !important;
+}
+</style>

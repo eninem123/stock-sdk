@@ -18,7 +18,10 @@
       "rateLimit",
       "rotateUserAgent",
       "circuitBreaker",
-      "providerPolicies"
+      "providerPolicies",
+      "fetchImpl",
+      "signal",
+      "hooks"
     ],
     "rateLimitType": "RateLimiterOptions",
     "providerPoliciesType": "Partial<Record<ProviderName, ProviderRequestPolicy>>",
@@ -72,7 +75,10 @@
       "rateLimit": "全局限流器配置，控制请求速率和突发流量。",
       "rotateUserAgent": "仅 Node.js 生效，自动轮换常见 UA 以降低频控概率。",
       "circuitBreaker": "全局熔断器配置，连续失败后短暂停止请求。",
-      "providerPolicies": "按 provider 单独覆盖超时、重试、限流、熔断和请求头策略。"
+      "providerPolicies": "按 provider 单独覆盖超时、重试、限流、熔断和请求头策略。",
+      "fetchImpl": "可注入的自定义 fetch 实现（代理 / mock / 日志），默认运行时全局 fetch。",
+      "signal": "client 级外部取消信号；触发后该实例全部在途请求归类为 ABORTED。",
+      "hooks": "请求生命周期钩子（onRequest/onResponse/onError/onRetry/trace），回调抛错不影响主流程。"
     },
     "providerDescriptions": {
       "tencent": "腾讯财经链路，主要用于实时行情、代码列表、搜索与交易日历。",
@@ -86,140 +92,155 @@
         "titleZh": "实时行情",
         "titleEn": "Real-time Quotes",
         "methods": [
-          "getFullQuotes",
-          "getSimpleQuotes",
-          "getHKQuotes",
-          "getUSQuotes",
-          "getFundQuotes"
+          "quotes.cn",
+          "quotes.cnSimple",
+          "quotes.hk",
+          "quotes.us",
+          "quotes.fund"
         ]
       },
       {
         "titleZh": "K 线与分时",
         "titleEn": "K-line & Timeline",
         "methods": [
-          "getHistoryKline",
-          "getHKHistoryKline",
-          "getUSHistoryKline",
-          "getMinuteKline",
-          "getTodayTimeline",
-          "getKlineWithIndicators"
+          "kline.cn",
+          "kline.hk",
+          "kline.us",
+          "kline.cnMinute",
+          "kline.hkMinute",
+          "kline.usMinute",
+          "quotes.timeline",
+          "kline.withIndicators"
         ]
       },
       {
         "titleZh": "板块与扩展数据",
         "titleEn": "Boards & Extended Data",
         "methods": [
-          "getIndustryList",
-          "getIndustrySpot",
-          "getIndustryConstituents",
-          "getIndustryKline",
-          "getConceptList",
-          "getConceptSpot",
-          "getConceptConstituents",
-          "getConceptKline",
-          "getFundFlow",
-          "getPanelLargeOrder",
+          "board.industry.list",
+          "board.industry.spot",
+          "board.industry.constituents",
+          "board.industry.kline",
+          "board.industry.minuteKline",
+          "board.concept.list",
+          "board.concept.spot",
+          "board.concept.constituents",
+          "board.concept.kline",
+          "board.concept.minuteKline",
+          "quotes.fundFlow",
+          "quotes.largeOrder",
           "search",
-          "getTradingCalendar",
-          "isTradingDay",
-          "nextTradingDay",
-          "prevTradingDay",
-          "getMarketStatus",
-          "getDividendDetail"
+          "reference.tradingCalendar",
+          "calendar.isTradingDay",
+          "calendar.nextTradingDay",
+          "calendar.prevTradingDay",
+          "calendar.marketStatus",
+          "reference.dividendDetail"
         ]
       },
       {
         "titleZh": "期货与期权",
         "titleEn": "Futures & Options",
         "methods": [
-          "getFuturesKline",
-          "getGlobalFuturesSpot",
-          "getGlobalFuturesKline",
-          "getFuturesInventorySymbols",
-          "getFuturesInventory",
-          "getComexInventory",
-          "getIndexOptionSpot",
-          "getIndexOptionKline",
-          "getCFFEXOptionQuotes",
-          "getETFOptionMonths",
-          "getETFOptionExpireDay",
-          "getETFOptionMinute",
-          "getETFOptionDailyKline",
-          "getETFOption5DayMinute",
-          "getCommodityOptionSpot",
-          "getCommodityOptionKline",
-          "getOptionLHB"
+          "futures.kline",
+          "futures.globalSpot",
+          "futures.globalKline",
+          "futures.inventorySymbols",
+          "futures.inventory",
+          "futures.comexInventory",
+          "options.index.spot",
+          "options.index.kline",
+          "options.cffex.quotes",
+          "options.etf.months",
+          "options.etf.expireDay",
+          "options.etf.minute",
+          "options.etf.dailyKline",
+          "options.etf.fiveDayMinute",
+          "options.commodity.spot",
+          "options.commodity.kline",
+          "options.lhb"
         ]
       },
       {
         "titleZh": "批量与代码列表",
         "titleEn": "Batch & Code Lists",
         "methods": [
-          "getAShareCodeList",
-          "getUSCodeList",
-          "getHKCodeList",
-          "getFundCodeList",
-          "getAllAShareQuotes",
-          "getAllHKShareQuotes",
-          "getAllUSShareQuotes",
-          "getAllQuotesByCodes",
-          "batchRaw"
+          "codes.cn",
+          "codes.us",
+          "codes.hk",
+          "codes.fund",
+          "batch.cn",
+          "batch.hk",
+          "batch.us",
+          "batch.byCodes",
+          "batch.raw"
         ]
       },
       {
         "titleZh": "资金流向（深度）",
         "titleEn": "Fund Flow (Deep)",
         "methods": [
-          "getIndividualFundFlow",
-          "getMarketFundFlow",
-          "getFundFlowRank",
-          "getSectorFundFlowRank",
-          "getSectorFundFlowHistory"
+          "fundFlow.individual",
+          "fundFlow.market",
+          "fundFlow.rank",
+          "fundFlow.sectorRank",
+          "fundFlow.sectorHistory"
         ]
       },
       {
         "titleZh": "沪深港通 / 北向资金",
         "titleEn": "Northbound / Stock Connect",
         "methods": [
-          "getNorthboundMinute",
-          "getNorthboundFlowSummary",
-          "getNorthboundHoldingRank",
-          "getNorthboundHistory",
-          "getNorthboundIndividual"
+          "northbound.minute",
+          "northbound.summary",
+          "northbound.holdingRank",
+          "northbound.history",
+          "northbound.individual"
         ]
       },
       {
         "titleZh": "涨停板 / 盘口异动",
         "titleEn": "Limit-Up Pool / Stock Changes",
         "methods": [
-          "getZTPool",
-          "getStockChanges",
-          "getBoardChanges"
+          "marketEvent.ztPool",
+          "marketEvent.stockChanges",
+          "marketEvent.boardChanges"
         ]
       },
       {
         "titleZh": "龙虎榜",
         "titleEn": "Dragon-Tiger List",
         "methods": [
-          "getDragonTigerDetail",
-          "getDragonTigerStockStats",
-          "getDragonTigerInstitution",
-          "getDragonTigerBranchRank",
-          "getDragonTigerStockSeatDetail"
+          "dragonTiger.detail",
+          "dragonTiger.stockStats",
+          "dragonTiger.institution",
+          "dragonTiger.branchRank",
+          "dragonTiger.seatDetail"
         ]
       },
       {
         "titleZh": "大宗交易 / 融资融券",
         "titleEn": "Block Trade / Margin Trading",
         "methods": [
-          "getBlockTradeMarketStat",
-          "getBlockTradeDetail",
-          "getBlockTradeDailyStat",
-          "getMarginAccountInfo",
-          "getMarginTargetList"
+          "blockTrade.marketStat",
+          "blockTrade.detail",
+          "blockTrade.dailyStat",
+          "margin.accountInfo",
+          "margin.targetList"
+        ]
+      },
+      {
+        "titleZh": "基金深度数据",
+        "titleEn": "Fund Deep Data",
+        "methods": [
+          "fund.dividendList",
+          "fund.navHistory",
+          "fund.estimate",
+          "fund.rankHistory"
         ]
       }
-    ]
+    ],
+    "methodGroupExemptions": []
   },
   "forbiddenTokens": [
     "RateLimitOptions",
@@ -228,7 +249,13 @@
     "< 20KB",
     "StockSDK/1.4",
     "StockSDK/1.8.0",
-    "coverage-95.88%25"
+    "coverage-95.88%25",
+    "period: 'day'",
+    "period: \"day\"",
+    "indicators: ['MA'",
+    "addIndicators(kline, ['MA'",
+    "sdk.screener()",
+    ".rankBy("
   ],
   "docExpectations": {
     "requiredTokensByFile": {
@@ -401,13 +428,13 @@
       "website/summary.md": [
         "此页面由脚本自动生成",
         "providerPolicies",
-        "getDividendDetail",
-        "getIndividualFundFlow",
-        "getNorthboundMinute",
-        "getZTPool",
-        "getDragonTigerDetail",
-        "getBlockTradeMarketStat",
-        "getMarginAccountInfo"
+        "reference.dividendDetail",
+        "fundFlow.individual",
+        "northbound.minute",
+        "marketEvent.ztPool",
+        "dragonTiger.detail",
+        "blockTrade.marketStat",
+        "margin.accountInfo"
       ]
     },
     "parityIgnore": [

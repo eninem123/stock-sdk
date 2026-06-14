@@ -19,6 +19,14 @@ import type { GlobalOptions, InvokeContext, OutputFormat } from './types';
 
 const BOOLEAN_FLAGS = collectBooleanFlags();
 
+// 管道下游提前关闭（如 `stock-sdk codes cn | head -5`）会让待 flush 的 stdout
+// 写入触发 EPIPE 'error' 事件，无监听则以裸 Node 堆栈崩溃（exit 1）。
+// mcp/transport.ts 已对 MCP 路径做了同样处理，查询命令路径此前缺失。
+process.stdout.on('error', (e: NodeJS.ErrnoException) => {
+  if (e.code === 'EPIPE') process.exit(0);
+  process.stderr.write(`stock-sdk: stdout error: ${e.message}\n`);
+});
+
 /**
  * 版本号在构建期由 tsup `define` 注入（`__STOCK_SDK_VERSION__`）。
  * 这样产物里不出现 `import.meta.url` —— 否则 cjs 产物会因解析期 `import.meta` 报错。

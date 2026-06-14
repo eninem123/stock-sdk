@@ -7,7 +7,10 @@
 import type { KlineWithIndicators } from '../indicators';
 import type { AnyHistoryKline } from '../types';
 import type { Signal, SignalOptions } from './types';
-import { InvalidArgumentError } from '../core';
+// 注意:必须从 '../core/errors' 叶子导入而非 '../core' barrel ——
+// barrel 会把整个请求层(fetch/熔断/UA 池)拖进 dist/signals.js,
+// 违背「纯计算零网络」的子路径承诺(errors/screener/symbols 均同此约定)
+import { InvalidArgumentError } from '../core/errors';
 
 export type { SignalType, Signal, SignalOptions } from './types';
 

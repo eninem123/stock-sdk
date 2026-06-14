@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../../mocks/server';
 import StockSDK from '../../../../src/index';
@@ -40,7 +40,7 @@ describe('TopicData - getZTPool', () => {
       })
     );
 
-    const result = await sdk.getZTPool('zt', '20240115');
+    const result = await sdk.marketEvent.ztPool('zt', '20240115');
     expect(result).toHaveLength(1);
     expect(result[0].code).toBe('600519');
     expect(result[0].name).toBe('贵州茅台');
@@ -62,7 +62,7 @@ describe('TopicData - getZTPool', () => {
       })
     );
 
-    await sdk.getZTPool('zt', '2024-01-15');
+    await sdk.marketEvent.ztPool('zt', '2024-01-15');
   });
 
   it('returns empty array when pool is empty', async () => {
@@ -72,7 +72,7 @@ describe('TopicData - getZTPool', () => {
       )
     );
 
-    const result = await sdk.getZTPool('zt');
+    const result = await sdk.marketEvent.ztPool('zt');
     expect(result).toEqual([]);
   });
 
@@ -86,11 +86,33 @@ describe('TopicData - getZTPool', () => {
       })
     );
 
-    await sdk.getZTPool('zt'); // 不传 date
+    await sdk.marketEvent.ztPool('zt'); // 不传 date
 
     expect(capturedDate).not.toBeNull();
     // 默认应使用北京时间 YYYYMMDD（8 位数字）
     expect(capturedDate).toMatch(/^\d{8}$/);
+  });
+
+  describe('F43: 默认 date 走 core/time todayInTz', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('UTC 仍是 12-31 时按北京时间取 01-01', async () => {
+      // UTC 2025-12-31 20:00 = 北京 2026-01-01 04:00(只 fake Date,timer 保持真实)
+      vi.useFakeTimers({ now: Date.UTC(2025, 11, 31, 20, 0), toFake: ['Date'] });
+      let capturedDate: string | null = null;
+      server.use(
+        http.get(`${ZT_BASE}/getTopicZTPool`, ({ request }) => {
+          capturedDate = new URL(request.url).searchParams.get('date');
+          return HttpResponse.json({ data: { pool: [] } });
+        })
+      );
+
+      await sdk.marketEvent.ztPool('zt'); // 不传 date
+
+      expect(capturedDate).toBe('20260101');
+    });
   });
 
   it('uses different endpoint for strong pool', async () => {
@@ -102,12 +124,12 @@ describe('TopicData - getZTPool', () => {
       })
     );
 
-    await sdk.getZTPool('strong', '20240115');
+    await sdk.marketEvent.ztPool('strong', '20240115');
     expect(endpointCalled).toBe('strong');
   });
 
   it('throws on unknown pool type', async () => {
-    await expect(sdk.getZTPool('unknown' as never)).rejects.toThrow(
+    await expect(sdk.marketEvent.ztPool('unknown' as never)).rejects.toThrow(
       /Invalid ZTPool/
     );
   });
@@ -138,7 +160,7 @@ describe('TopicData - getStockChanges', () => {
       })
     );
 
-    const result = await sdk.getStockChanges('large_buy');
+    const result = await sdk.marketEvent.stockChanges('large_buy');
     expect(result).toHaveLength(1);
     expect(result[0].time).toBe('09:30:55');
     expect(result[0].code).toBe('600519');
@@ -148,7 +170,7 @@ describe('TopicData - getStockChanges', () => {
   });
 
   it('throws on invalid change type', async () => {
-    await expect(sdk.getStockChanges('foo' as never)).rejects.toThrow(
+    await expect(sdk.marketEvent.stockChanges('foo' as never)).rejects.toThrow(
       /Invalid StockChangeType/
     );
   });
@@ -183,7 +205,7 @@ describe('TopicData - getBoardChanges', () => {
       )
     );
 
-    const result = await sdk.getBoardChanges();
+    const result = await sdk.marketEvent.boardChanges();
     expect(result).toHaveLength(2);
     expect(result[0].name).toBe('白酒');
     expect(result[0].topStockDirection).toBe('大笔买入');

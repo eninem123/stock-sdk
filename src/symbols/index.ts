@@ -9,7 +9,12 @@ export type {
   NormalizedSymbol,
   SymbolInput,
 } from './types';
-export { normalizeSymbol } from './normalize';
-export { toTencentSymbol, toEastmoneySecid, toPlainCode } from './adapters';
+export { normalizeSymbol, marketOf } from './normalize';
+export {
+  toTencentSymbol,
+  toEastmoneySecid,
+  toPlainCode,
+  EXCHANGE_TO_SECID_PREFIX,
+} from './adapters';
 export { inferAShareExchange } from './infer';
 export { extractVariety, FUTURES_EXCHANGES } from './futures';

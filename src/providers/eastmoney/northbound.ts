@@ -6,6 +6,7 @@
  */
 import {
   type RequestClient,
+  assertNorthboundDirection,
   EM_NORTHBOUND_MINUTE_URL,
   EM_DATA_TOKEN,
   toNumber,
@@ -23,6 +24,7 @@ import type {
   NorthboundIndividualItem,
 } from '../../types';
 import { fetchDatacenterList, parseDcDate } from './datacenter';
+import { toIsoDate } from './utils';
 
 /** 北向持股排行选项 */
 export interface NorthboundHoldingRankOptions {
@@ -107,6 +109,9 @@ export async function getNorthboundMinute(
   client: RequestClient,
   direction: NorthboundDirection = 'north'
 ): Promise<NorthboundMinuteItem[]> {
+  // TS 类型只防编译期；MCP/CLI 运行时入口可传任意字符串，
+  // 此前非 'south' 的垃圾值会被静默当作 'north' 返回错误方向的数据
+  assertNorthboundDirection(direction);
   const params = new URLSearchParams({
     fields1: 'f1,f2,f3,f4',
     fields2: 'f51,f54,f52,f58,f53,f62,f56,f57,f60,f61',
@@ -121,24 +126,14 @@ export async function getNorthboundMinute(
   if (direction === 'south') {
     const list = data.n2s ?? [];
     const date = data.n2sDate ?? '';
-    return list.map((line) => parseMinuteRow(line, formatDate(date)));
+    return list.map((line) => parseMinuteRow(line, toIsoDate(date)));
   }
 
   const list = data.s2n ?? [];
   const date = data.s2nDate ?? '';
-  return list.map((line) => parseMinuteRow(line, formatDate(date)));
+  return list.map((line) => parseMinuteRow(line, toIsoDate(date)));
 }
 
-/**
- * 把 YYYYMMDD 或 YYYY-MM-DD 格式的字符串归一化为 YYYY-MM-DD。
- */
-function formatDate(value: string): string {
-  if (!value) return '';
-  if (/^\d{8}$/.test(value)) {
-    return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
-  }
-  return value;
-}
 
 /**
  * 获取沪深港通市场资金流向汇总（北向/南向 + 港股通沪深拆分）
@@ -246,13 +241,16 @@ export async function getNorthboundHistory(
   direction: NorthboundDirection = 'north',
   options: NorthboundHistoryOptions = {}
 ): Promise<NorthboundHistoryItem[]> {
+  assertNorthboundDirection(direction);
   const { startDate, endDate } = options;
   // MUTUAL_TYPE 编码：001 沪股通, 003 深股通, 005 港股通(沪), 007 港股通(深)
   // 对外简化：北向 = 沪股通+深股通合计；南向 = 港股通(沪)+(深) 合计
   // 实际通常以 BOARD_TYPE 区分整体，这里 BOARD_TYPE: 1=北向 0=南向
   const filters: string[] = [direction === 'north' ? '(BOARD_TYPE="1")' : '(BOARD_TYPE="0")'];
-  if (startDate) filters.push(`(TRADE_DATE>='${startDate}')`);
-  if (endDate) filters.push(`(TRADE_DATE<='${endDate}')`);
+  // datacenter filter 只认 YYYY-MM-DD：YYYYMMDD（CLI help 的文档格式）必须归一，
+  // 否则字典序比较 '2024-..' < '20240101' 会排除所有行（静默空结果）
+  if (startDate) filters.push(`(TRADE_DATE>='${toIsoDate(startDate)}')`);
+  if (endDate) filters.push(`(TRADE_DATE<='${toIsoDate(endDate)}')`);
 
   return fetchDatacenterList(
     client,
@@ -296,8 +294,8 @@ export async function getNorthboundIndividual(
   const { startDate, endDate } = options;
 
   const filters: string[] = [`(SECURITY_CODE="${pureSymbol}")`];
-  if (startDate) filters.push(`(TRADE_DATE>='${startDate}')`);
-  if (endDate) filters.push(`(TRADE_DATE<='${endDate}')`);
+  if (startDate) filters.push(`(TRADE_DATE>='${toIsoDate(startDate)}')`);
+  if (endDate) filters.push(`(TRADE_DATE<='${toIsoDate(endDate)}')`);
 
   return fetchDatacenterList(
     client,

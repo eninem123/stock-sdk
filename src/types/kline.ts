@@ -6,7 +6,7 @@ import type { MarketTz } from '../core/time';
 export interface HistoryKline {
   /** 日期 YYYY-MM-DD (A 股时区) */
   date: string;
-  /** 当日 00:00 (`Asia/Shanghai`) 的 UTC 毫秒时间戳;无法解析时为 `NaN` */
+  /** 当日 00:00 (`Asia/Shanghai`) 的 UTC 毫秒时间戳;无法解析时为 `null` */
   timestamp: number | null;
   /** 日期所属市场时区 (`Asia/Shanghai`) */
   tz: MarketTz;
@@ -40,7 +40,7 @@ export interface HistoryKline {
 export interface MinuteTimeline {
   /** 时间 YYYY-MM-DD HH:mm (A 股时区) */
   time: string;
-  /** UTC 毫秒时间戳 (`Asia/Shanghai` 解释);无法解析时为 `NaN` */
+  /** UTC 毫秒时间戳 (`Asia/Shanghai` 解释);无法解析时为 `null` */
   timestamp: number | null;
   /** 时间所属市场时区 (`Asia/Shanghai`) */
   tz: MarketTz;
@@ -66,7 +66,7 @@ export interface MinuteTimeline {
 export interface MinuteKline {
   /** 时间 YYYY-MM-DD HH:mm (A 股时区) */
   time: string;
-  /** UTC 毫秒时间戳 (`Asia/Shanghai` 解释);无法解析时为 `NaN` */
+  /** UTC 毫秒时间戳 (`Asia/Shanghai` 解释);无法解析时为 `null` */
   timestamp: number | null;
   /** 时间所属市场时区 (`Asia/Shanghai`) */
   tz: MarketTz;
@@ -100,7 +100,7 @@ export interface TodayTimeline {
   time: string;
   /**
    * UTC 毫秒时间戳。由所属 `TodayTimelineResponse.date` 与 `time` 拼接后,
-   * 按 `Asia/Shanghai` 解释得到;无法解析时为 `NaN`。
+   * 按 `Asia/Shanghai` 解释得到;无法解析时为 `null`。
    */
   timestamp: number | null;
   /** 时间所属市场时区 (`Asia/Shanghai`) */
@@ -123,7 +123,7 @@ export interface TodayTimelineResponse {
   code: string;
   /** 交易日期 YYYY-MM-DD (A 股时区) */
   date: string;
-  /** 交易日 00:00 (`Asia/Shanghai`) 的 UTC 毫秒时间戳;无法解析时为 `NaN` */
+  /** 交易日 00:00 (`Asia/Shanghai`) 的 UTC 毫秒时间戳;无法解析时为 `null` */
   timestamp: number | null;
   /** 日期所属市场时区 (`Asia/Shanghai`) */
   tz: MarketTz;
@@ -146,7 +146,7 @@ export interface TodayTimelineResponse {
 interface ForeignHistoryKlineBase {
   /** 日期 YYYY-MM-DD (市场本地时区) */
   date: string;
-  /** UTC 毫秒时间戳;无法解析时为 `NaN` */
+  /** UTC 毫秒时间戳;无法解析时为 `null` */
   timestamp: number | null;
   /** 股票代码 */
   code: string;

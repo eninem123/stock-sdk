@@ -12,7 +12,7 @@ import { calcOBV } from './obv';
 import { calcROC } from './roc';
 import { calcRSI } from './rsi';
 import { calcSAR } from './sar';
-import type { IndicatorOptions, OHLCV } from './types';
+import type { IndicatorOptions, OHLCV, PeriodsShorthand } from './types';
 import { calcWR } from './wr';
 
 type BaseKline = AnyHistoryKline;
@@ -28,12 +28,38 @@ interface IndicatorLookback {
   emaBased?: boolean;
 }
 
+/**
+ * descriptor 只接受【归一化后】的完整形式 option(简写已在
+ * normalizeIndicatorOptions 中展开),周期型指标无需各自处理数组/period 简写。
+ */
+type CanonicalOption<K extends IndicatorKey> = Exclude<
+  IndicatorOptions[K],
+  PeriodsShorthand
+>;
+
 interface IndicatorDescriptor<K extends IndicatorKey = IndicatorKey> {
   key: K;
-  estimateLookback: (option: IndicatorOptions[K]) => IndicatorLookback;
+  /**
+   * 全量累计型指标(如 OBV:从序列首根累计成交量):数值依赖序列起点,
+   * 任何切片都会改变绝对值 —— 消费方(indicatorService 的 refetch 切片)
+   * 必须跳过切片。该知识声明在 registry(P2-7),新增累计型指标时
+   * 在此标记即可,无需记得去改 service 的白名单。
+   */
+  cumulative?: boolean;
+  /**
+   * 平滑/递推状态型指标(如 KDJ/RSI 的 Wilder 平滑、MACD 的 EMA 链):
+   * 每根值递推依赖前一根的内部状态,切片起点不同则状态不同 —— 消费方
+   * (indicatorService 的 refetch 切片)需按 15× 周期暖机让状态收敛到
+   * round(2) 之下。与 cumulative 同为「消费方策略由 registry 声明」的机制
+   * (R3-12):纯窗口型指标(SMA/BOLL/WR 等)只看固定窗口,无需暖机放大。
+   * ma 特殊:仅 type:'ema' 才递归,由 estimateLookback 的 emaBased 动态承担,
+   * 故 ma 不静态标记 recursive。
+   */
+  recursive?: boolean;
+  estimateLookback: (option: CanonicalOption<K>) => IndicatorLookback;
   compute: (
     context: IndicatorComputationContext,
-    option: IndicatorOptions[K]
+    option: CanonicalOption<K>
   ) => unknown[];
 }
 
@@ -80,6 +106,7 @@ export const INDICATOR_REGISTRY: IndicatorDescriptorMap = {
   },
   macd: {
     key: 'macd',
+    recursive: true,
     estimateLookback: (option) => {
       const cfg = typeof option === 'object' ? option : {};
       const long = cfg.long ?? 26;
@@ -105,6 +132,7 @@ export const INDICATOR_REGISTRY: IndicatorDescriptorMap = {
   },
   kdj: {
     key: 'kdj',
+    recursive: true,
     estimateLookback: (option) => ({
       bars:
         typeof option === 'object' && option.period
@@ -116,6 +144,7 @@ export const INDICATOR_REGISTRY: IndicatorDescriptorMap = {
   },
   rsi: {
     key: 'rsi',
+    recursive: true,
     estimateLookback: (option) => {
       const periods =
         typeof option === 'object' && option.periods
@@ -165,6 +194,7 @@ export const INDICATOR_REGISTRY: IndicatorDescriptorMap = {
   },
   atr: {
     key: 'atr',
+    recursive: true,
     estimateLookback: (option) => ({
       bars:
         typeof option === 'object' && option.period
@@ -176,6 +206,7 @@ export const INDICATOR_REGISTRY: IndicatorDescriptorMap = {
   },
   obv: {
     key: 'obv',
+    cumulative: true,
     estimateLookback: (option) => {
       const maPeriod =
         typeof option === 'object' && option.maPeriod
@@ -199,6 +230,7 @@ export const INDICATOR_REGISTRY: IndicatorDescriptorMap = {
   },
   dmi: {
     key: 'dmi',
+    recursive: true,
     estimateLookback: (option) => {
       const cfg = typeof option === 'object' ? option : {};
       const period = cfg.period ?? 14;
@@ -210,12 +242,14 @@ export const INDICATOR_REGISTRY: IndicatorDescriptorMap = {
   },
   sar: {
     key: 'sar',
+    recursive: true,
     estimateLookback: () => ({ bars: 5 }),
     compute: (context, option) =>
       calcSAR(context.ohlcv, typeof option === 'object' ? option : {}),
   },
   kc: {
     key: 'kc',
+    recursive: true,
     estimateLookback: (option) => {
       const cfg = typeof option === 'object' ? option : {};
       const emaPeriod = cfg.emaPeriod ?? 20;
@@ -230,6 +264,42 @@ export const INDICATOR_REGISTRY: IndicatorDescriptorMap = {
   },
 };
 
+/** periods 复数形式的指标(支持数组 / {period} 简写) */
+const PERIODS_PLURAL_KEYS = ['ma', 'rsi', 'wr', 'bias'] as const;
+
+/**
+ * 文档简写归一(F32):`ma: [5, 20]` → `{ periods: [5, 20] }`、
+ * `rsi: { period: 14 }` → `{ periods: [14] }`。
+ * 此前文档/JSDoc 多处示例就是简写形式,但实现只认 `{ periods }`:
+ * JS 用户照抄会静默拿到默认周期(无 ma7/ma21 还把 lookback 放大到 250)。
+ * 幂等;在 addIndicators 与 estimateIndicatorLookback 入口各调一次。
+ */
+export function normalizeIndicatorOptions(options: IndicatorOptions): IndicatorOptions {
+  let out: Record<string, unknown> | null = null;
+  for (const key of PERIODS_PLURAL_KEYS) {
+    const v = options[key];
+    if (Array.isArray(v)) {
+      (out ??= { ...options })[key] = { periods: v };
+    } else if (
+      v &&
+      typeof v === 'object' &&
+      !('periods' in v) &&
+      typeof (v as { period?: unknown }).period === 'number'
+    ) {
+      const { period, ...rest } = v as { period: number };
+      (out ??= { ...options })[key] = { ...rest, periods: [period] };
+    }
+  }
+  return (out as IndicatorOptions | null) ?? options;
+}
+
+/** 启用的指标中是否含全量累计型(OBV 等):切片会改变其绝对值 */
+export function hasCumulativeIndicator(options: IndicatorOptions): boolean {
+  return getEnabledIndicatorKeys(normalizeIndicatorOptions(options)).some(
+    (key) => INDICATOR_REGISTRY[key].cumulative === true
+  );
+}
+
 export function getEnabledIndicatorKeys(options: IndicatorOptions): IndicatorKey[] {
   return (Object.keys(INDICATOR_REGISTRY) as IndicatorKey[]).filter(
     (key) => Boolean(options[key])
@@ -240,15 +310,29 @@ export function estimateIndicatorLookback(options: IndicatorOptions): {
   maxLookback: number;
   hasEmaBasedIndicator: boolean;
   requiredBars: number;
+  /**
+   * 启用指标中【递归型】(descriptor.recursive 或该配置下 emaBased,如
+   * ma type:'ema')的最大 lookback;为 0 表示纯窗口型组合,消费方切片
+   * 无需 15× 暖机放大(R3-12:此前用全局 maxLookback,纯 SMA-250 也被
+   * 放大到 3750 根,白算 3000+)。
+   */
+  maxRecursiveLookback: number;
 } {
+  options = normalizeIndicatorOptions(options);
   let maxLookback = 0;
+  let maxRecursiveLookback = 0;
   let hasEmaBasedIndicator = false;
 
   for (const key of getEnabledIndicatorKeys(options)) {
     const descriptor = INDICATOR_REGISTRY[key];
-    const lookback = descriptor.estimateLookback(options[key]);
+    // normalizeIndicatorOptions 已在函数入口归一,断言为完整形式
+    const lookback = descriptor.estimateLookback(options[key] as never);
     maxLookback = Math.max(maxLookback, lookback.bars);
     hasEmaBasedIndicator ||= Boolean(lookback.emaBased);
+    // 递归性 = 静态声明(recursive)∪ 配置动态(emaBased,覆盖 ma type:'ema')
+    if (descriptor.recursive === true || lookback.emaBased === true) {
+      maxRecursiveLookback = Math.max(maxRecursiveLookback, lookback.bars);
+    }
   }
 
   const buffer = hasEmaBasedIndicator ? 1.5 : 1.2;
@@ -256,5 +340,6 @@ export function estimateIndicatorLookback(options: IndicatorOptions): {
     maxLookback,
     hasEmaBasedIndicator,
     requiredBars: Math.ceil(maxLookback * buffer),
+    maxRecursiveLookback,
   };
 }

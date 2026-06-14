@@ -45,6 +45,7 @@ export {
   safeNumberOrNull,
   toNumber,
   toNumberSafe,
+  toFiniteNumberOrNull,
 } from './parser';
 
 // 工具函数
@@ -55,6 +56,7 @@ export {
   assertKlinePeriod,
   assertMinutePeriod,
   assertAdjustType,
+  assertNorthboundDirection,
   getPeriodCode,
   getAdjustCode,
 } from './utils';
@@ -67,7 +69,6 @@ export {
   US_LIST_URL,
   HK_LIST_URL,
   FUND_LIST_URL,
-  CODE_LIST_URL,
   EM_KLINE_URL,
   EM_TRENDS_URL,
   EM_HK_KLINE_URL,
@@ -106,7 +107,6 @@ export {
   SINA_SSE_OPTION_5DAY_URL,
   EM_OPTION_CFFEX_URL,
   EM_OPTION_LHB_URL,
-  EM_OPTION_LHB_TOKEN,
   CFFEX_OPTION_PRODUCT_MAP,
   COMMODITY_OPTION_MAP,
   DEFAULT_TIMEOUT,
@@ -168,7 +168,10 @@ export {
   type MarketTz,
   type TimeMeta,
   parseMarketTime,
+  toNullableEpoch,
+  addDays,
   buildTimeMeta,
   buildTimeMetaFromDateAndTime,
   formatInTz,
+  todayInTz,
 } from './time';

@@ -63,6 +63,17 @@ describe('TradingCalendarService', () => {
       const svc = new TradingCalendarService(makeFakeQuote(calendar));
       await expect(svc.isTradingDay('not a date')).rejects.toThrow(/Unsupported date input/);
     });
+
+    it('F43: 无参时取 Asia/Shanghai 当日(收编到 core/time todayInTz 后行为不变)', async () => {
+      // UTC 2024-09-29 20:00(周日) = 北京 2024-09-30 04:00(周一,交易日)
+      vi.useFakeTimers({ now: Date.UTC(2024, 8, 29, 20, 0), toFake: ['Date'] });
+      try {
+        const svc = new TradingCalendarService(makeFakeQuote(calendar));
+        expect(await svc.isTradingDay()).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('nextTradingDay', () => {

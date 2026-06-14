@@ -12,7 +12,7 @@
 
 无需 Python、无需后端服务，直接在 **浏览器或 Node.js** 中获取 **A 股 / 港股 / 美股 / 公募基金** 的实时行情与 K 线数据。还自带 **命令行工具** 与 **MCP server**，一条命令取行情或接入 AI。
 
-**✨ 零依赖 | 🌐 Browser + Node.js | 📦 ESM + CJS + subpath | 🧠 完整 TypeScript 类型 | 🖥️ CLI | 🤖 MCP**
+**✨ 零依赖、轻量发布包 | 🌐 Browser + Node.js | 📦 ESM + CJS + subpath | 🧠 完整 TypeScript 类型 | 🖥️ CLI | 🤖 MCP**
 
 > 🧪 **v2.0.0 Beta**：v2 是一次架构跃迁（命名空间 API、统一符号模型、`Quote` 可辨识联合、统一错误体系、CLI / MCP / subpath 导出）。
 > 安装 beta：`npm i stock-sdk@beta`。从 v1 升级请先读 [v1 → v2 迁移指南](https://stock-sdk-v2.linkdiary.cn/guide/migration-v1-to-v2)（**破坏性变更，无兼容别名**）。
@@ -216,6 +216,10 @@ try {
 只用纯计算（指标 / 符号 / 信号 / 选股）时，从 subpath 导入，bundle 不会拖入 `RequestClient` 与所有 provider：
 
 ```ts
+// 14 个指标、共 17 个纯函数(MA 族含 calcSMA/calcEMA/calcWMA 三个变体):
+// calcSMA / calcEMA / calcWMA / calcMA / calcMACD / calcBOLL / calcKDJ /
+// calcRSI / calcWR / calcBIAS / calcCCI / calcATR / calcOBV / calcROC /
+// calcDMI / calcSAR / calcKC
 import { calcMACD, calcKDJ } from 'stock-sdk/indicators';
 import { normalizeSymbol, toTencentSymbol } from 'stock-sdk/symbols';
 import { calcSignals } from 'stock-sdk/signals';
