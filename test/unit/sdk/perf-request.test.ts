@@ -285,27 +285,56 @@ describe('F35: skip the full-history refetch for short-listed symbols', () => {
   // startDate '2024-06-03'、ratio 1.5 → actualStartDate = 2024-06-03 - 9 天 = '20240525'
   const indicators: IndicatorOptions = { ma: { periods: [5] } };
 
-  it('does NOT refetch when the first bar is later than actualStartDate', async () => {
-    // 首次就只回 5 根(< requiredBars 6),但首根 2024-06-03 晚于 actualStartDate
-    // 2024-05-25 → 上游在此之前已无历史,refetch 只会拿回同一批数据
+  it('does NOT refetch when the first bar is far later than actualStartDate (true IPO)', async () => {
+    // P1-4 后日线容差为 30 个自然日:首根晚于 actualStartDate 30 天以上
+    // 才认定'上市晚、无更早数据'(真 IPO 场景 gap 通常以月计)
     const short = ['2024-06-03', '2024-06-04', '2024-06-05', '2024-06-06', '2024-06-07'].map(
       (d, i) => makeKline(d, 100 + i)
     );
     const { service, klineService } = makeService({ A: short });
 
     const rows = await service.getKlineWithIndicators('600519', {
-      startDate: '2024-06-03',
+      // startDate 2024-04-28,ratio 路径 actualStartDate ≈ 2024-04-19;
+      // 首根 2024-06-03 距其 45 天 > 30 → 判定上市晚,跳过 refetch
+      startDate: '2024-04-28',
       indicators,
     });
 
     expect(klineService.getHistoryKline).toHaveBeenCalledTimes(1);
-    expect(klineService.getHistoryKline).toHaveBeenCalledWith(
-      '600519',
-      expect.objectContaining({ startDate: '20240525' })
-    );
-    // 短路不影响输出:5 根全部在窗口内
+    // 5 根全部在窗口内(均 >= startDate)
     expect(rows).toHaveLength(5);
     expect(rows[4].ma?.ma5).not.toBeNull();
+  });
+
+  it('P1-4: 30 天内的间隙(假期/停牌)仍然 refetch', async () => {
+    // 首根距 actualStartDate 9 个自然日(黄金周/短停牌量级)→ 可能是
+    // 被 beg 截断,保守 refetch(旧 7 天容差下这里也 refetch;30 天容差
+    // 把更长的停牌一并覆盖)
+    const short = ['2024-06-03', '2024-06-04', '2024-06-05', '2024-06-06', '2024-06-07'].map(
+      (d, i) => makeKline(d, 100 + i)
+    );
+    const { service, klineService } = makeService({ A: [short, short] });
+    await service.getKlineWithIndicators('600519', {
+      startDate: '2024-06-03',
+      indicators,
+    });
+    expect(klineService.getHistoryKline).toHaveBeenCalledTimes(2);
+  });
+
+  it('P1-4: 周/月线一律保守 refetch(标签在期末,间距判定不适用)', async () => {
+    // 月线首根标签是月末,距 actualStartDate 常 8~30 天 —— 任何固定容差
+    // 都会误判;period 非 daily 时无条件 refetch(实测此前月线窗口首段
+    // kdj 全 null)
+    const monthly = ['2024-02-29', '2024-03-29', '2024-04-30'].map((d, i) =>
+      makeKline(d, 100 + i)
+    );
+    const { service, klineService } = makeService({ A: [monthly, monthly] });
+    await service.getKlineWithIndicators('600519', {
+      period: 'monthly',
+      startDate: '2024-03-01',
+      indicators,
+    });
+    expect(klineService.getHistoryKline).toHaveBeenCalledTimes(2);
   });
 
   it('still refetches when the first bar is at/before actualStartDate but bars are insufficient', async () => {
@@ -355,13 +384,43 @@ describe('F35: skip the full-history refetch for short-listed symbols', () => {
       makeKline(d, 100 + i)
     );
     const { service, klineService } = makeService({ HK: short });
+    // P1-4 后日线容差 30 天:起点早于首根 40+ 天构造真 IPO 间距
     await service.getKlineWithIndicators('00700', {
       market: 'HK',
-      startDate: '2024-06-03',
+      startDate: '2024-04-20',
       indicators,
     });
     expect(klineService.getHKHistoryKline).toHaveBeenCalledTimes(1);
     expect(klineService.getHistoryKline).not.toHaveBeenCalled();
+  });
+});
+
+describe('P1-6: 非法日期格式干净报错(不再裸 RangeError / 静默空窗)', () => {
+  it.each(['2024-1-5', '2024/01/05', '2024-6-3', 'not-a-date'])(
+    "startDate '%s' → InvalidArgumentError",
+    async (startDate) => {
+      const { service } = makeService({ A: genKlines(30) });
+      await expect(
+        service.getKlineWithIndicators('600519', {
+          startDate,
+          indicators: { ma: { periods: [5] } },
+        })
+      ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+    }
+  );
+
+  it('合法格式(YYYY-MM-DD / YYYYMMDD / 含时间)照常工作', async () => {
+    const bars = genKlines(30);
+    const { service } = makeService({ A: bars });
+    const a = await service.getKlineWithIndicators('600519', {
+      startDate: bars[20].date,
+      indicators: {},
+    });
+    const b = await service.getKlineWithIndicators('600519', {
+      startDate: bars[20].date.replace(/-/g, ''),
+      indicators: {},
+    });
+    expect(a).toEqual(b);
   });
 });
 

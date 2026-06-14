@@ -12,7 +12,8 @@
  *  6) 失败抛 InvalidSymbolError
  *
  * `hint` 与 `SymbolRef` 字段冲突时，显式入参（SymbolRef）优先；
- * 显式 hint（market/exchange）与符号本身解析结果矛盾时抛 InvalidSymbolError，
+ * 显式 hint（market/exchange）与符号本身的确定性解析结果矛盾时抛
+ * InvalidSymbolError（纯数字等歧义输入上 hint 用于消歧而非校验），
  * 不静默选边产出 market/exchange 自相矛盾的结果。
  */
 import { InvalidSymbolError } from '../core/errors';
@@ -119,10 +120,19 @@ export function normalizeSymbol(
     assetType: AssetType,
     variety?: string
   ): NormalizedSymbol => {
+    // market hint 与解析结果矛盾时拒绝(Review P1-3):此前仅纯数字分支尊重
+    // market hint,字母/点分/前缀分支静默忽略 —— F39 把 kline.hk 接上
+    // normalizeSymbol({market:'HK'}) 后,kline.hk('AAPL') 会拼出 105.AAPL
+    // 拉回【真实美股数据】标注 HKD(此前是拼坏 secid 返回空数组的 fail-safe)。
+    // 现在统一语义:hint 在可消歧分支用于消歧,与确定性解析结果矛盾即抛错。
+    if (hintMarket && hintMarket !== market) {
+      throw new InvalidSymbolError(
+        `${rawInput} (market hint '${hintMarket}' conflicts with resolved market ${market})`
+      );
+    }
     // exchange hint 与解析出的 market 矛盾时拒绝（如 '600519' + {exchange:'HKEX'}）。
     // 否则会产出 market/exchange 自相矛盾的对象：toTencentSymbol 抛错而
-    // toEastmoneySecid 拼出错误标的（116.600519）—— 与 N1 修 market 时同类问题，
-    // exchange 这扇门此前没堵上。
+    // toEastmoneySecid 拼出错误标的（116.600519）—— 与 N1 修 market 时同类问题。
     if (hintExchange) {
       const owner = EXCHANGE_MARKET[hintExchange];
       if (owner && owner !== market) {
@@ -155,7 +165,12 @@ export function normalizeSymbol(
       // 否则 toTencentSymbol 拼成 'shsh600519'（与 SUFFIX 分支同款问题）。
       return finish(s.market, s.exchange, stripRedundantPrefix(right, s, rawInput), 'stock');
     }
-    const suffix = PREFIX_MAP[right.toLowerCase()];
+    // Object.hasOwn 守卫:小写键查找会命中 Object.prototype 继承属性
+    // ('600519.constructor' 此前产出 market/exchange 均 undefined 的畸形对象)
+    const suffixKey = right.toLowerCase();
+    const suffix = Object.prototype.hasOwnProperty.call(PREFIX_MAP, suffixKey)
+      ? PREFIX_MAP[suffixKey]
+      : undefined;
     if (suffix) {
       return finish(suffix.market, suffix.exchange, stripRedundantPrefix(left, suffix, rawInput), 'stock');
     }

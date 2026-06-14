@@ -17,6 +17,7 @@ import type { AnyHistoryKline } from '../types';
 import type { KlineService } from './klineService';
 import type { QuoteService } from './quoteService';
 import { marketOf } from '../symbols';
+import { InvalidArgumentError } from '../core/errors';
 
 export type MarketType = 'A' | 'HK' | 'US';
 
@@ -105,14 +106,24 @@ export class IndicatorService {
     return this.toCompactDate(calendar[targetIndex]);
   }
 
+  /**
+   * 归一日期为 'YYYY-MM-DD'。接受 'YYYY-MM-DD[ HH:mm...]'(截取日期部分)与
+   * 'YYYYMMDD'。Review P1-6:此前对'含横线但非补零'的串('2024-5-1')原样放行,
+   * 在字典序比较下整窗丢失、进 addNaturalDays 还会抛裸 RangeError ——
+   * 现在非法格式直接抛 InvalidArgumentError(对外只抛 SdkError 契约)。
+   */
   private normalizeDate(dateStr: string): string {
-    if (dateStr.includes('-')) {
-      return dateStr;
+    const v = dateStr.trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(v)) {
+      return v.slice(0, 10);
     }
-    if (dateStr.length === 8) {
-      return `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+    if (/^\d{8}$/.test(v)) {
+      return `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}`;
     }
-    return dateStr;
+    throw new InvalidArgumentError(
+      `日期格式应为 'YYYY-MM-DD' 或 'YYYYMMDD',得到 '${dateStr}'`,
+      { argument: 'date', value: dateStr }
+    );
   }
 
   private toCompactDate(dateStr: string): string {
@@ -178,15 +189,21 @@ export class IndicatorService {
     // 返回的第一根 K 线日期已明显【晚于】请求的 actualStartDate,说明上游在
     // actualStartDate 之前本就没有更多历史(标的上市晚),refetch 只会拿回
     // 完全相同的数据 —— 每次调用白白双倍上游流量。
-    // 终审修复:HK/US ratio 路径的 actualStartDate 可能落在周末/假日,首根落在
-    // 其后几天属正常(并非"无更早数据"),严格 > 判定会把"被 beg 截断"误判成
-    // "上市晚"而漏 refetch —— 放宽为 7 个自然日容差;超过 7 天才认定上市晚。
-    // 日期统一归一成 'YYYY-MM-DD' 后按字符串比较。
+    //
+    // Review P1-4:间距判定只对【日线】成立 ——
+    // - 周/月线的标签在期末(月线首根可晚于起点 8~30 天),任何固定容差都会
+    //   误判'上市晚'而漏 refetch(实测月线窗口首段 kdj 全 null)→ 非日线
+    //   一律保守 refetch(查询频次低,多一次请求换正确性)。
+    // - 日线容差从 7 天放宽到 30 天:覆盖 A 股黄金周/春节(10-11 天)与多数
+    //   个股停牌;>30 天的长期停牌仍可能被误判(代价是窗口头部指标为 null),
+    //   属"流量换正确性"的已记录权衡。误判方向是宁可多 refetch。
+    const period = options.period ?? 'daily';
     const mayHaveEarlierData =
       allKlines.length === 0 ||
       actualStartDate === undefined ||
+      period !== 'daily' ||
       this.normalizeDate(allKlines[0].date) <=
-        addNaturalDays(this.normalizeDate(actualStartDate), 7);
+        addNaturalDays(this.normalizeDate(actualStartDate), 30);
 
     let refetchedFullHistory = false;
     if (startDate && allKlines.length < requiredBars && mayHaveEarlierData) {

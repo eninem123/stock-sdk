@@ -171,9 +171,13 @@ describe('F40 行为差异:新旧不一致且新行为更对(按新行为断言)
       // market 字段语义保留(sh),code 经 normalizeSymbol 归一为 00700;
       // 旧输出 quote.eastmoney.com/shhk00700.html(前缀未剥),新旧均为废链接,
       // 新形态更归一
-      ['sh', 'hk00700', 'https://quote.eastmoney.com/sh00700.html', 'https://xueqiu.com/S/SH00700'],
-      // 港股 hint + 纯字母 code:旧 padStart 伪补零得 '00HSI',新保留原码
-      ['hk', 'HSI', 'https://quote.eastmoney.com/hk/HSI.html', 'https://xueqiu.com/S/HSI'],
+      // P1-3 后:market hint(sh→CN)与 hk 前缀矛盾在 normalizeSymbol 即抛错 →
+      // 搜索兜底(此前拼出 sh00700.html 半残链接,新行为更对)
+      ['sh', 'hk00700', 'https://so.eastmoney.com/web/s?keyword=hk00700', 'https://xueqiu.com/k?q=hk00700'],
+      // 港股 hint + 纯字母 code(恒指类指数):P1-3 后 HK hint 与字母分支的
+      // US 解析矛盾 → 抛错 → 搜索兜底(旧版 padStart 伪补零得 '00HSI' 废链接,
+      // 上一版保留原码同样指向不存在的个股页;搜索兜底对指数类输入最稳)
+      ['hk', 'HSI', 'https://so.eastmoney.com/web/s?keyword=HSI', 'https://xueqiu.com/k?q=HSI'],
     ]);
   });
 });
