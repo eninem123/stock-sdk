@@ -1,7 +1,16 @@
 import { defineConfig } from 'vitepress'
+import { resolve } from 'path'
+import { readFileSync } from 'fs'
 
 // v2 文档站配置（site-v2，与 website/ 的 v1 站平级独立）
 const base = process.env.DOCS_BASE || '/'
+
+// 构建期读取真实版本号，注入 themeConfig 供 HeroMeta 等组件使用（避免硬编码失真）
+const sdkVersion = (
+  JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf-8')) as {
+    version: string
+  }
+).version
 
 // ---- 中文侧边栏 ----
 const zhGuideSidebar = {
@@ -229,8 +238,8 @@ export default defineConfig({
         href: 'https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap',
       },
     ],
-    // v2 主色：teal 青绿（区别于 v1 的红色 #f87171）
-    ['meta', { name: 'theme-color', content: '#0d9488' }],
+    // v2 主色：深红（红 = 涨 = 吉利；浅色模式 #b91c1c，深色模式亮红 #f87171）
+    ['meta', { name: 'theme-color', content: '#b91c1c' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:site_name', content: 'Stock SDK v2' }],
   ],
@@ -248,9 +257,15 @@ export default defineConfig({
           { text: 'API', link: '/api/' },
           { text: 'CLI', link: '/cli/' },
           { text: 'MCP · AI', link: '/mcp/' },
-          { text: 'Playground', link: '/playground/' },
-          { text: '更新日志', link: '/changelog' },
-          { text: 'Demo', link: 'https://chengzuopeng.github.io/stock-dashboard/' },
+          { text: '演练场', link: '/playground/' },
+          // 版本下拉：导航展示 latest 版本号，hover 出更新日志与 v1 文档外链
+          {
+            text: `v${sdkVersion}`,
+            items: [
+              { text: '更新日志', link: '/changelog' },
+              { text: 'v1 文档', link: 'https://v1.stock-sdk.linkdiary.cn', target: '_blank' },
+            ],
+          },
         ],
         sidebar: {
           ...zhGuideSidebar,
@@ -276,8 +291,13 @@ export default defineConfig({
           { text: 'CLI', link: '/en/cli/' },
           { text: 'MCP · AI', link: '/en/mcp/' },
           { text: 'Playground', link: '/en/playground/' },
-          { text: 'Changelog', link: '/en/changelog' },
-          { text: 'Demo', link: 'https://chengzuopeng.github.io/stock-dashboard/' },
+          {
+            text: `v${sdkVersion}`,
+            items: [
+              { text: 'Changelog', link: '/en/changelog' },
+              { text: 'v1 Docs', link: 'https://v1.stock-sdk.linkdiary.cn', target: '_blank' },
+            ],
+          },
         ],
         sidebar: {
           ...enGuideSidebar,
@@ -303,6 +323,11 @@ export default defineConfig({
   // 顶层 themeConfig:跨 locale 共享的配置(search / editLink / lastUpdated 文案)
   // 必须放顶层 —— VitePress 构建期只读顶层 themeConfig 决定本地搜索与更新时间。
   themeConfig: {
+    logo: '/logo.svg',
+
+    // 自定义字段：当前 SDK 版本，HeroMeta 组件通过 useData().theme.sdkVersion 读取
+    sdkVersion,
+
     socialLinks: [
       { icon: 'github', link: 'https://github.com/chengzuopeng/stock-sdk' },
     ],
@@ -313,5 +338,21 @@ export default defineConfig({
       text: '在 GitHub 上编辑此页',
     },
     lastUpdated: { text: '最后更新于' },
+  },
+
+  // Vite 配置
+  vite: {
+    resolve: {
+      alias: {
+        // 开发模式下将 'stock-sdk-local' 指向本地 src 目录（LiveTicker dogfooding 用）
+        'stock-sdk-local': resolve(__dirname, '../../src'),
+      },
+    },
+    server: {
+      fs: {
+        // 允许访问上级目录（用于引用 src）
+        allow: ['../..'],
+      },
+    },
   },
 })

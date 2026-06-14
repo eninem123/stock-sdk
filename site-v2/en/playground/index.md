@@ -1,34 +1,67 @@
-# Playground
+---
+layout: page
+title: Playground
+---
 
-An interactive area to call stock-sdk v2 right in your browser and inspect the responses instantly.
+<script setup>
+import Playground from '../../.vitepress/theme/components/Playground.vue'
+import { onMounted, onUnmounted } from 'vue'
 
-## Coming soon
+// Scope page-level styles via a body class
+onMounted(() => {
+  document.body.classList.add('playground-page')
+})
 
-The Playground is being wired up alongside the v2 SDK implementation. The v1 docs site already ships a set of interactive, per-method components (16 categories, editable parameters, run in place); they will be migrated to the v2 site with every call rewritten from v1's flat style to **namespaced calls**:
+onUnmounted(() => {
+  document.body.classList.remove('playground-page')
+})
+</script>
 
-```ts
-// v1 (old)
-const [quote] = await sdk.quotes.cn(['sh600519'])
+<Playground />
 
-// v2 (the style the Playground will use)
-const [quote] = await sdk.quotes.cn(['sh600519'])
-```
+<style>
+/* ===== Playground page-level styles (scoped via body.playground-page) ===== */
 
-Once it's live, you'll be able to:
+body.playground-page .VPDoc {
+  padding: 0 !important;
+}
 
-- Pick a namespace and method (`sdk.quotes.cn` / `sdk.kline.cn` / `sdk.options.etf.dailyKline`, etc.)
-- Edit symbols and parameters — symbols accept forgiving `string` parsing (`sh600519` / `600519` / `00700` / `AAPL` all work)
-- Run with one click and inspect responses that follow the v2 data contract (the unified `Quote` union, minimal currency units, `timestamp: number | null`)
+body.playground-page .VPDoc .container {
+  max-width: 100% !important;
+}
 
-> Status: to be wired up once the v2 SDK implementation lands. This page will then be replaced with the real interactive component — the link stays the same.
+body.playground-page .VPDoc .content {
+  padding: 0 !important;
+}
 
-## Start here
+body.playground-page .vp-doc {
+  padding: 0 !important;
+}
 
-Until the Playground is live, follow the readable examples in the docs and run them yourself:
+body.playground-page .VPSidebar {
+  display: none !important;
+}
 
-- [Quick Start](/en/guide/getting-started) — a 10-line namespaced demo to get your first call working
-- [Installation](/en/guide/installation) — npm / yarn / pnpm, subpath imports (`stock-sdk/indicators`, `/signals`, `/symbols`)
-- [API Reference](/en/api/) — the namespace map plus each method's signature, parameters, and return notes
-- [Symbols & Code Rules](/en/guide/symbols) — `string` vs `SymbolRef`, and forgiving parsing via `normalizeSymbol`
+body.playground-page .VPContent.has-sidebar {
+  padding-left: 0 !important;
+}
 
-Every code block in the docs is a copy-paste-runnable namespaced snippet; the Playground just moves them into the browser with instant execution.
+body.playground-page .VPNavBar .wrapper {
+  max-width: 100% !important;
+  padding-left: 24px !important;
+  padding-right: 24px !important;
+}
+
+body.playground-page .VPNavBar .container {
+  max-width: 100% !important;
+}
+
+body.playground-page .VPFooter,
+body.playground-page footer {
+  display: none !important;
+}
+
+body.playground-page .VPContent {
+  overflow: hidden !important;
+}
+</style>
