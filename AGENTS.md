@@ -156,7 +156,7 @@ export async function getQuotes(codes: string[]): Promise<Quote[]> {
 |------|------|------|
 | 文件名 | camelCase | `aShareKline.ts` |
 | 类名 | PascalCase | `StockSDK` |
-| 函数名 | camelCase | `getFullQuotes` |
+| 函数名 | camelCase | `quotes.cn` |
 | 常量 | UPPER_SNAKE_CASE | `DEFAULT_TIMEOUT` |
 | 类型/接口 | PascalCase | `FullQuote` |
 
@@ -317,29 +317,29 @@ yarn build:pages
 
 | 方法 | 说明 |
 |------|------|
-| `getFullQuotes(codes)` | A 股 / 指数全量行情 |
-| `getSimpleQuotes(codes)` | A 股 / 指数简要行情 |
-| `getHKQuotes(codes)` | 港股行情 |
-| `getUSQuotes(codes)` | 美股行情 |
-| `getFundQuotes(codes)` | 公募基金行情 |
+| `quotes.cn(codes)` | A 股 / 指数全量行情 |
+| `quotes.cnSimple(codes)` | A 股 / 指数简要行情 |
+| `quotes.hk(codes)` | 港股行情 |
+| `quotes.us(codes)` | 美股行情 |
+| `quotes.fund(codes)` | 公募基金行情 |
 
 ### K 线与分时
 
 | 方法 | 说明 |
 |------|------|
-| `getHistoryKline(symbol, options)` | A 股历史 K 线 |
-| `getMinuteKline(symbol, options)` | A 股分钟 K 线 / 分时 |
-| `getHKHistoryKline(symbol, options)` | 港股历史 K 线 |
-| `getHKMinuteKline(symbol, options)` | 港股分钟 K 线 / 当日分时（v1.10.0+） |
-| `getUSHistoryKline(symbol, options)` | 美股历史 K 线 |
-| `getUSMinuteKline(symbol, options)` | 美股分钟 K 线 / 当日分时（v1.10.0+） |
-| `getTodayTimeline(code)` | A 股当日分时走势 |
+| `kline.cn(symbol, options)` | A 股历史 K 线 |
+| `kline.cnMinute(symbol, options)` | A 股分钟 K 线 / 分时 |
+| `kline.hk(symbol, options)` | 港股历史 K 线 |
+| `kline.hkMinute(symbol, options)` | 港股分钟 K 线 / 当日分时（v1.10.0+） |
+| `kline.us(symbol, options)` | 美股历史 K 线 |
+| `kline.usMinute(symbol, options)` | 美股分钟 K 线 / 当日分时（v1.10.0+） |
+| `quotes.timeline(code)` | A 股当日分时走势 |
 
 ### 技术指标
 
 | 方法 | 说明 |
 |------|------|
-| `getKlineWithIndicators(symbol, options)` | 获取带技术指标的 K 线数据 |
+| `kline.withIndicators(symbol, options)` | 获取带技术指标的 K 线数据 |
 | `calcMA(data, options)` | 均线（SMA / EMA / WMA） |
 | `calcMACD(data, options)` | MACD |
 | `calcBOLL(data, options)` | 布林带 |
@@ -360,125 +360,125 @@ yarn build:pages
 
 | 方法 | 说明 |
 |------|------|
-| `getIndustryList()` | 行业板块列表 |
-| `getIndustrySpot(symbol)` | 行业板块实时行情 |
-| `getIndustryConstituents(symbol)` | 行业板块成分股 |
-| `getIndustryKline(symbol, options)` | 行业板块历史 K 线 |
-| `getIndustryMinuteKline(symbol, options)` | 行业板块分钟行情 |
-| `getConceptList()` | 概念板块列表 |
-| `getConceptSpot(symbol)` | 概念板块实时行情 |
-| `getConceptConstituents(symbol)` | 概念板块成分股 |
-| `getConceptKline(symbol, options)` | 概念板块历史 K 线 |
-| `getConceptMinuteKline(symbol, options)` | 概念板块分钟行情 |
+| `board.industry.list()` | 行业板块列表 |
+| `board.industry.spot(symbol)` | 行业板块实时行情 |
+| `board.industry.constituents(symbol)` | 行业板块成分股 |
+| `board.industry.kline(symbol, options)` | 行业板块历史 K 线 |
+| `board.industry.minuteKline(symbol, options)` | 行业板块分钟行情 |
+| `board.concept.list()` | 概念板块列表 |
+| `board.concept.spot(symbol)` | 概念板块实时行情 |
+| `board.concept.constituents(symbol)` | 概念板块成分股 |
+| `board.concept.kline(symbol, options)` | 概念板块历史 K 线 |
+| `board.concept.minuteKline(symbol, options)` | 概念板块分钟行情 |
 
 ### 批量与代码列表
 
 | 方法 | 说明 |
 |------|------|
-| `getAShareCodeList(options)` | 获取 A 股代码列表 |
-| `getUSCodeList(options)` | 获取美股代码列表 |
-| `getHKCodeList()` | 获取港股代码列表 |
-| `getFundCodeList()` | 获取基金代码列表 |
-| `getAllAShareQuotes(options)` | 获取全市场 A 股行情 |
-| `getAllHKShareQuotes(options)` | 获取全市场港股行情 |
-| `getAllUSShareQuotes(options)` | 获取全市场美股行情 |
-| `getAllQuotesByCodes(codes, options)` | 按代码列表批量获取 A 股行情 |
-| `batchRaw(params)` | 批量原始查询 |
+| `codes.cn(options)` | 获取 A 股代码列表 |
+| `codes.us(options)` | 获取美股代码列表 |
+| `codes.hk()` | 获取港股代码列表 |
+| `codes.fund()` | 获取基金代码列表 |
+| `batch.cn(options)` | 获取全市场 A 股行情 |
+| `batch.hk(options)` | 获取全市场港股行情 |
+| `batch.us(options)` | 获取全市场美股行情 |
+| `batch.byCodes(codes, options)` | 按代码列表批量获取 A 股行情 |
+| `batch.raw(params)` | 批量原始查询 |
 
 ### 其他股票数据
 
 | 方法 | 说明 |
 |------|------|
-| `getFundFlow(codes)` | 资金流向（简版） |
-| `getPanelLargeOrder(codes)` | 盘口大单占比 |
-| `getTradingCalendar()` | A 股交易日历 |
-| `getMarketStatus(market)` | 市场开 / 休市状态 |
+| `quotes.fundFlow(codes)` | 资金流向（简版） |
+| `quotes.largeOrder(codes)` | 盘口大单占比 |
+| `reference.tradingCalendar()` | A 股交易日历 |
+| `calendar.marketStatus(market)` | 市场开 / 休市状态 |
 | `search(keyword)` | 股票搜索 |
-| `getDividendDetail(symbol)` | 分红派送详情 |
+| `reference.dividendDetail(symbol)` | 分红派送详情 |
 
 ### 期货数据
 
 | 方法 | 说明 |
 |------|------|
-| `getFuturesKline(symbol, options)` | 国内期货历史 K 线 |
-| `getGlobalFuturesSpot(options)` | 全球期货实时行情 |
-| `getGlobalFuturesKline(symbol, options)` | 全球期货历史 K 线 |
-| `getFuturesInventorySymbols()` | 期货库存品种列表 |
-| `getFuturesInventory(symbol, options)` | 期货库存数据 |
-| `getComexInventory(symbol, options)` | COMEX 黄金 / 白银库存 |
+| `futures.kline(symbol, options)` | 国内期货历史 K 线 |
+| `futures.globalSpot(options)` | 全球期货实时行情 |
+| `futures.globalKline(symbol, options)` | 全球期货历史 K 线 |
+| `futures.inventorySymbols()` | 期货库存品种列表 |
+| `futures.inventory(symbol, options)` | 期货库存数据 |
+| `futures.comexInventory(symbol, options)` | COMEX 黄金 / 白银库存 |
 
 ### 期权数据
 
 | 方法 | 说明 |
 |------|------|
-| `getIndexOptionSpot(product, contract)` | 中金所股指期权 T 型报价 |
-| `getIndexOptionKline(symbol)` | 中金所股指期权日 K 线 |
-| `getCFFEXOptionQuotes(options)` | 中金所全部期权实时行情 |
-| `getETFOptionMonths(cate)` | ETF 期权到期月份 |
-| `getETFOptionExpireDay(cate, month)` | ETF 期权到期日与剩余天数 |
-| `getETFOptionMinute(code)` | ETF 期权当日分钟行情 |
-| `getETFOptionDailyKline(code)` | ETF 期权日 K 线 |
-| `getETFOption5DayMinute(code)` | ETF 期权 5 日分钟行情 |
-| `getCommodityOptionSpot(variety, contract)` | 商品期权 T 型报价 |
-| `getCommodityOptionKline(symbol)` | 商品期权日 K 线 |
-| `getOptionLHB(symbol, date)` | 期权龙虎榜 |
+| `options.index.spot(product, contract)` | 中金所股指期权 T 型报价 |
+| `options.index.kline(symbol)` | 中金所股指期权日 K 线 |
+| `options.cffex.quotes(options)` | 中金所全部期权实时行情 |
+| `options.etf.months(cate)` | ETF 期权到期月份 |
+| `options.etf.expireDay(cate, month)` | ETF 期权到期日与剩余天数 |
+| `options.etf.minute(code)` | ETF 期权当日分钟行情 |
+| `options.etf.dailyKline(code)` | ETF 期权日 K 线 |
+| `options.etf.fiveDayMinute(code)` | ETF 期权 5 日分钟行情 |
+| `options.commodity.spot(variety, contract)` | 商品期权 T 型报价 |
+| `options.commodity.kline(symbol)` | 商品期权日 K 线 |
+| `options.lhb(symbol, date)` | 期权龙虎榜 |
 
 ### 资金流向（深度）
 
 | 方法 | 说明 |
 |------|------|
-| `getIndividualFundFlow(symbol, options)` | 个股资金流历史（日 / 周 / 月） |
-| `getMarketFundFlow()` | 大盘资金流（上证 + 深证） |
-| `getFundFlowRank(options)` | 个股资金流排名（沪深北全市场） |
-| `getSectorFundFlowRank(options)` | 板块资金流排名（行业 / 概念 / 地域） |
-| `getSectorFundFlowHistory(symbol, options)` | 单个板块历史资金流 |
+| `fundFlow.individual(symbol, options)` | 个股资金流历史（日 / 周 / 月） |
+| `fundFlow.market()` | 大盘资金流（上证 + 深证） |
+| `fundFlow.rank(options)` | 个股资金流排名（沪深北全市场） |
+| `fundFlow.sectorRank(options)` | 板块资金流排名（行业 / 概念 / 地域） |
+| `fundFlow.sectorHistory(symbol, options)` | 单个板块历史资金流 |
 
 ### 沪深港通 / 北向资金
 
 | 方法 | 说明 |
 |------|------|
-| `getNorthboundMinute(direction)` | 北向 / 南向资金分时 |
-| `getNorthboundFlowSummary()` | 沪深港通资金流向汇总 |
-| `getNorthboundHoldingRank(options)` | 北向 / 沪股通 / 深股通持股排行 |
-| `getNorthboundHistory(direction, options)` | 北向 / 南向按日历史 |
-| `getNorthboundIndividual(symbol, options)` | 个股北向持仓历史 |
+| `northbound.minute(direction)` | 北向 / 南向资金分时 |
+| `northbound.summary()` | 沪深港通资金流向汇总 |
+| `northbound.holdingRank(options)` | 北向 / 沪股通 / 深股通持股排行 |
+| `northbound.history(direction, options)` | 北向 / 南向按日历史 |
+| `northbound.individual(symbol, options)` | 个股北向持仓历史 |
 
 ### 涨停 / 盘口异动
 
 | 方法 | 说明 |
 |------|------|
-| `getZTPool(type, date?)` | 涨停 / 跌停 / 强势等股池（含连板数） |
-| `getStockChanges(type)` | 盘口异动（22 种类型） |
-| `getBoardChanges()` | 当日板块异动 |
+| `marketEvent.ztPool(type, date?)` | 涨停 / 跌停 / 强势等股池（含连板数） |
+| `marketEvent.stockChanges(type)` | 盘口异动（22 种类型） |
+| `marketEvent.boardChanges()` | 当日板块异动 |
 
 ### 龙虎榜
 
 | 方法 | 说明 |
 |------|------|
-| `getDragonTigerDetail(options)` | 龙虎榜详情（按日期范围） |
-| `getDragonTigerStockStats(period)` | 个股上榜统计 |
-| `getDragonTigerInstitution(options)` | 机构买卖统计 |
-| `getDragonTigerBranchRank(period)` | 营业部排行 |
-| `getDragonTigerStockSeatDetail(symbol, date)` | 个股某日上榜席位明细 |
+| `dragonTiger.detail(options)` | 龙虎榜详情（按日期范围） |
+| `dragonTiger.stockStats(period)` | 个股上榜统计 |
+| `dragonTiger.institution(options)` | 机构买卖统计 |
+| `dragonTiger.branchRank(period)` | 营业部排行 |
+| `dragonTiger.seatDetail(symbol, date)` | 个股某日上榜席位明细 |
 
 ### 大宗交易 / 融资融券
 
 | 方法 | 说明 |
 |------|------|
-| `getBlockTradeMarketStat()` | 大宗交易市场每日总览 |
-| `getBlockTradeDetail(options)` | 大宗交易明细（按日期范围） |
-| `getBlockTradeDailyStat(options)` | 大宗交易每日统计（按股票汇总） |
-| `getMarginAccountInfo()` | 融资融券账户统计 |
-| `getMarginTargetList(date?)` | 融资融券标的明细 |
+| `blockTrade.marketStat()` | 大宗交易市场每日总览 |
+| `blockTrade.detail(options)` | 大宗交易明细（按日期范围） |
+| `blockTrade.dailyStat(options)` | 大宗交易每日统计（按股票汇总） |
+| `margin.accountInfo()` | 融资融券账户统计 |
+| `margin.targetList(date?)` | 融资融券标的明细 |
 
 ### 公募基金扩展（v1.10.0+）
 
 | 方法 | 说明 |
 |------|------|
-| `getFundDividendList(options)` | 基金 / ETF 分红明细 |
-| `getFundNavHistory(code)` | 基金历史净值（单位 + 累计） |
-| `getFundEstimate(code)` | 当日实时估值（T-1 净值 + 盘中估算） |
-| `getFundRankHistory(code)` | 同类排名走势 |
+| `fund.dividendList(options)` | 基金 / ETF 分红明细 |
+| `fund.navHistory(code)` | 基金历史净值（单位 + 累计） |
+| `fund.estimate(code)` | 当日实时估值（T-1 净值 + 盘中估算） |
+| `fund.rankHistory(code)` | 同类排名走势 |
 
 > 完整方法签名与参数以 `src/sdk.ts` 门面、README 和 website API 文档为准；上表用于让 AI 快速把握能力边界，新增能力时请同步本表。
 

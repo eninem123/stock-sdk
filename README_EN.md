@@ -12,7 +12,7 @@ A **stock market data JavaScript SDK for frontend and Node.js**.
 
 No Python. No backend service. Fetch real-time quotes and K-line data for **A-shares / Hong Kong stocks / US stocks / mutual funds** directly in **the browser or Node.js**. It also ships a **command-line tool** and an **MCP server** — one command to pull quotes or wire up AI tools.
 
-**✨ Zero dependencies | 🌐 Browser + Node.js | 📦 ESM + CJS + subpaths | 🧠 Full TypeScript typings | 🖥️ CLI | 🤖 MCP**
+**✨ Zero dependencies, Lightweight distribution | 🌐 Browser + Node.js | 📦 ESM + CJS + subpaths | 🧠 Full TypeScript typings | 🖥️ CLI | 🤖 MCP**
 
 > 🧪 **v2.0.0 Beta**: v2 is an architectural leap (namespaced API, unified symbol model, `Quote` discriminated union, unified error system, CLI / MCP / subpath exports).
 > Install the beta: `npm i stock-sdk@beta`. Upgrading from v1? Read the [v1 → v2 migration guide](https://stock-sdk-v2.linkdiary.cn/en/guide/migration-v1-to-v2) first (**breaking changes, no compat aliases**).
@@ -216,6 +216,9 @@ try {
 For pure-compute use (indicators / symbols / signals / screener), import from a subpath so the bundle doesn't pull in `RequestClient` or any provider:
 
 ```ts
+// All 14 indicators ship pure functions: calcMA / calcEMA / calcMACD / calcBOLL /
+// calcKDJ / calcRSI / calcWR / calcBIAS / calcCCI / calcATR / calcOBV / calcROC /
+// calcDMI / calcSAR / calcKC
 import { calcMACD, calcKDJ } from 'stock-sdk/indicators';
 import { normalizeSymbol, toTencentSymbol } from 'stock-sdk/symbols';
 import { calcSignals } from 'stock-sdk/signals';

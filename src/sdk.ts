@@ -79,7 +79,17 @@ export class StockSDK {
   // 命名空间懒构建一次并缓存：保证引用稳定（sdk.quotes === sdk.quotes，达成 TD §7.2 目标）
   private readonly _ns: Record<string, unknown> = {};
   private memoNs<T>(key: string, build: () => T): T {
-    return (this._ns[key] ??= build()) as T;
+    // 注意:这里【不能】写成 `(this._ns[key] ??= build())` —— tsup 的
+    // cjs+splitting+minify 管线会把 `return` 与注入的 `_nullishCoalesce` helper
+    // 熔接成坏标识符 `return_nullishCoalesce`,导致 dist/*.cjs 的全部命名空间
+    // getter 首次访问即抛 ReferenceError(ESM 产物正常)。
+    // 回归护栏:test/unit/dist-smoke.test.ts(构建后运行)。
+    let cached = this._ns[key];
+    if (cached === undefined) {
+      cached = build();
+      this._ns[key] = cached;
+    }
+    return cached as T;
   }
 
   /** 实时行情 */
