@@ -1,4 +1,18 @@
 import { addIndicators, estimateIndicatorLookback, type IndicatorOptions, type KlineWithIndicators } from '../indicators';
+
+/**
+ * 全量 refetch 后切片的 lookback 下限(根)。
+ * estimateIndicatorLookback 的 requiredBars 是"窗口期能算出值"的下限,
+ * 不足以让递归型指标(KDJ/RSI/ATR/DMI)的平滑状态收敛到 round(2) 之下;
+ * 500 根下 Wilder-14 的状态差衰减至 ~2e-16,对 2 位小数输出即逐值一致。
+ */
+const RECURSIVE_WARMUP = 500;
+
+/** 'YYYY-MM-DD' 加 n 个自然日(UTC 日历加法,正确处理跨月/跨年) */
+function addNaturalDays(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
 import type { AnyHistoryKline } from '../types';
 import type { KlineService } from './klineService';
 import type { QuoteService } from './quoteService';
@@ -161,18 +175,22 @@ export class IndicatorService {
 
     // F35:短上市标的双请求短路。
     // 原逻辑只要 `allKlines.length < requiredBars` 就无条件全量 refetch,但若首次
-    // 返回的第一根 K 线日期已【晚于】请求的 actualStartDate,说明上游在
+    // 返回的第一根 K 线日期已明显【晚于】请求的 actualStartDate,说明上游在
     // actualStartDate 之前本就没有更多历史(标的上市晚),refetch 只会拿回
     // 完全相同的数据 —— 每次调用白白双倍上游流量。
-    // 仅当返回为空、或首根 <= actualStartDate(数据可能确实被 beg 截断)时
-    // 才保留原有的全量 refetch。日期统一归一成 'YYYY-MM-DD' 后按字符串比较
-    // (allKlines[0].date 是 'YYYY-MM-DD',actualStartDate 是 'YYYYMMDD')。
+    // 终审修复:HK/US ratio 路径的 actualStartDate 可能落在周末/假日,首根落在
+    // 其后几天属正常(并非"无更早数据"),严格 > 判定会把"被 beg 截断"误判成
+    // "上市晚"而漏 refetch —— 放宽为 7 个自然日容差;超过 7 天才认定上市晚。
+    // 日期统一归一成 'YYYY-MM-DD' 后按字符串比较。
     const mayHaveEarlierData =
       allKlines.length === 0 ||
       actualStartDate === undefined ||
-      this.normalizeDate(allKlines[0].date) <= this.normalizeDate(actualStartDate);
+      this.normalizeDate(allKlines[0].date) <=
+        addNaturalDays(this.normalizeDate(actualStartDate), 7);
 
+    let refetchedFullHistory = false;
     if (startDate && allKlines.length < requiredBars && mayHaveEarlierData) {
+      refetchedFullHistory = true;
       switch (market) {
         case 'HK':
           allKlines = await this.klineService.getHKHistoryKline(symbol, {
@@ -194,14 +212,20 @@ export class IndicatorService {
       }
     }
 
-    // F37:先裁剪后算指标。
+    // F37:先裁剪后算指标(仅全量 refetch 后)。
     // 原逻辑对全量历史先 addIndicators 算完全部指标,再逐 bar `new Date()` 过滤,
     // 窄窗口查询时 >99% 的计算结果直接被丢弃(refetch 全量历史时尤甚)。
-    // 现在先按日期字符串定位窗口首根,向前保留 requiredBars 根 lookback 再计算:
-    // requiredBars 本就是 estimateIndicatorLookback 给出的"指标需要的前置根数"
-    // (EMA 类的 1.5x buffer 已含余量),窗口内指标值与全量计算一致
-    // (见 test/unit/sdk/perf-request.test.ts 的全量 vs 切片对拍)。
-    // 最终过滤同样改为归一化日期字符串比较(ISO 'YYYY-MM-DD' 字典序即时间序),
+    //
+    // 终审修复(Review Finding 1):切片只对【全量 refetch】后的历史做 ——
+    // 常规路径 fetched 本就从 actualStartDate 起(≈ 窗口 + lookback),切片是
+    // 近似 no-op 的"优化",却会在 ratio 超额 1-2 根时削掉递归型指标
+    // (KDJ/RSI/ATR/DMI 的平滑状态)的暖机历史,产生 round(2) 可见的数值漂移
+    // (实测 |Δd| 最大 9.4)。不切片即与旧实现逐值一致。
+    // refetch 路径保留切片的性能收益,但 lookback 下限提到 RECURSIVE_WARMUP:
+    // Wilder-14 的状态差衰减 (13/14)^486 ≈ 2e-16、KDJ(1/3 平滑)更快,
+    // 2 位舍入下与全量计算逐值一致;OBV 是全量累计型(基数取决于序列起点),
+    // 启用时跳过切片以保持与旧实现(全量计算)一致。
+    // 最终过滤统一为归一化日期字符串比较(ISO 字典序即时间序),
     // 消除逐 bar 的 new Date() 分配。
     if (startDate) {
       const startNorm = this.normalizeDate(startDate);
@@ -215,8 +239,14 @@ export class IndicatorService {
         return [];
       }
 
-      const sliced = allKlines.slice(Math.max(0, windowStartIdx - requiredBars));
-      return addIndicators(sliced, indicators).filter((item) => {
+      let toCompute = allKlines;
+      if (refetchedFullHistory && !indicators.obv) {
+        // refetch 触发条件含 length < requiredBars,requiredBars > 0 即必有指标,
+        // 故此分支总需要暖机 lookback
+        const lookback = Math.max(requiredBars, RECURSIVE_WARMUP);
+        toCompute = allKlines.slice(Math.max(0, windowStartIdx - lookback));
+      }
+      return addIndicators(toCompute, indicators).filter((item) => {
         const date = this.normalizeDate(item.date);
         return date >= startNorm && (endNorm === undefined || date <= endNorm);
       });

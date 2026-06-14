@@ -404,15 +404,82 @@ describe('F37: slice before computing indicators', () => {
       indicators,
     });
 
-    // (a) 窗口内逐值与旧路径完全一致(切片保留了 requiredBars 根 lookback)
+    // (a) 窗口内逐值与旧路径完全一致
     expect(rows).toHaveLength(endIdx - startIdx + 1);
     expect(rows).toEqual(legacy);
 
-    // (b) addIndicators 收到的是裁剪后的切片,而不是全量 500 根
+    // (b) 终审修复:常规路径(未 refetch)【不再切片】—— fetched 本就从
+    // actualStartDate 起,切片会削掉递归型指标的暖机历史产生数值漂移;
+    // 不切片即与旧实现逐值一致
     expect(addIndicators).toHaveBeenCalledTimes(1);
     const computed = vi.mocked(addIndicators).mock.calls[0][0];
-    expect(computed).toHaveLength(fullKlines.length - (startIdx - requiredBars)); // 425
-    expect(computed.length).toBeLessThan(fullKlines.length);
+    expect(computed).toHaveLength(fullKlines.length);
+  });
+
+  it('Review F1 回归:kdj 小 lookback 常规路径与旧实现逐值一致(不切片)', async () => {
+    // requiredBars = ceil(9*1.2) = 11,远低于 KDJ 平滑暖机需求 ——
+    // 修复前切片会让窗口内 k/d 漂移(实测 |Δd| 最大 9.4)
+    const kdjOnly: IndicatorOptions = { kdj: {} };
+    const bars = genKlines(60);
+    const startDate = bars[40].date;
+    const legacy = addIndicators(bars, kdjOnly).filter((item) => item.date >= startDate);
+    vi.mocked(addIndicators).mockClear();
+
+    const { service } = makeService({ A: bars });
+    const rows = await service.getKlineWithIndicators('600519', {
+      startDate,
+      indicators: kdjOnly,
+    });
+    expect(rows).toEqual(legacy);
+  });
+
+  it('Review F1 回归:全量 refetch 后切片带 RECURSIVE_WARMUP 下限,与全量计算逐值一致', async () => {
+    const kdjOnly: IndicatorOptions = { kdj: {} }; // requiredBars=11 → floor 到 500
+    const longHistory = genKlines(2000);
+    const startIdx = 1900;
+    const startDate = longHistory[startIdx].date;
+    const legacy = addIndicators(longHistory, kdjOnly).filter(
+      (item) => item.date >= startDate
+    );
+    vi.mocked(addIndicators).mockClear();
+
+    // 首次返回空 → 触发全量 refetch
+    const { service, klineService } = makeService({ A: [[], longHistory] });
+    const rows = await service.getKlineWithIndicators('600519', {
+      startDate,
+      indicators: kdjOnly,
+    });
+
+    expect(klineService.getHistoryKline).toHaveBeenCalledTimes(2);
+    // 切片生效:2000 根只算 startIdx-500 起的 600 根
+    const computed = vi.mocked(addIndicators).mock.calls[
+      vi.mocked(addIndicators).mock.calls.length - 1
+    ][0];
+    expect(computed).toHaveLength(longHistory.length - (startIdx - 500)); // 600
+    // 暖机下限保证窗口内与全量计算逐值一致(KDJ 状态差在 500 根下衰减殆尽)
+    expect(rows).toEqual(legacy);
+  });
+
+  it('Review F1 回归:OBV(全量累计型)启用时 refetch 后不切片', async () => {
+    const withObv: IndicatorOptions = { obv: {} };
+    const longHistory = genKlines(800);
+    const startDate = longHistory[700].date;
+    const legacy = addIndicators(longHistory, withObv).filter(
+      (item) => item.date >= startDate
+    );
+    vi.mocked(addIndicators).mockClear();
+
+    const { service } = makeService({ A: [[], longHistory] });
+    const rows = await service.getKlineWithIndicators('600519', {
+      startDate,
+      indicators: withObv,
+    });
+
+    const computed = vi.mocked(addIndicators).mock.calls[
+      vi.mocked(addIndicators).mock.calls.length - 1
+    ][0];
+    expect(computed).toHaveLength(longHistory.length); // 不切片
+    expect(rows).toEqual(legacy);
   });
 
   it('supports compact YYYYMMDD startDate and open-ended endDate', async () => {
@@ -433,17 +500,15 @@ describe('F37: slice before computing indicators', () => {
     expect(rows).toEqual(legacy);
   });
 
-  it('computes nothing beyond the window when no indicators are requested', async () => {
+  it('no-indicator queries return the plain window unchanged', async () => {
+    // 无指标 → requiredBars=0,refetch 永不触发(切片分支不可达),
+    // 常规路径整组透传 addIndicators(注册表循环为空,逐 bar 仅 clone)
     const startIdx = 490;
     const { service } = makeService({ A: fullKlines });
     const rows = await service.getKlineWithIndicators('600519', {
       startDate: fullKlines[startIdx].date,
       indicators: {},
     });
-    // requiredBars = 0 → 切片即窗口本身
-    expect(vi.mocked(addIndicators).mock.calls[0][0]).toHaveLength(
-      fullKlines.length - startIdx
-    );
     expect(rows).toEqual(fullKlines.slice(startIdx));
   });
 
