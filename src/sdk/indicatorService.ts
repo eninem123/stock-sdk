@@ -1,16 +1,22 @@
 import { addIndicators, estimateIndicatorLookback, hasCumulativeIndicator, type IndicatorOptions, type KlineWithIndicators } from '../indicators';
 
 /**
- * 全量 refetch 后切片的 lookback 下限(根)。
+ * 全量 refetch 后切片的 lookback 下限(根),仅对【递归型】指标组合生效。
  * estimateIndicatorLookback 的 requiredBars 是"窗口期能算出值"的下限,
  * 不足以让递归型指标(KDJ/RSI/ATR/DMI)的平滑状态收敛到 round(2) 之下;
  * 500 根下 Wilder-14 的状态差衰减至 ~2e-16,对 2 位小数输出即逐值一致。
  *
  * Review P2-7:500 只按默认周期标定 —— 非默认大周期(如 rsi periods:[100])
  * 的 Wilder-100 在 400 步后仅衰减到 ~1.8%,round(2) 可见。实际下限取
- * max(500, 15 × maxLookback):暖机内首个有效值前还要消耗 ~N 根种子,
+ * max(500, 15 × maxRecursiveLookback):暖机内首个有效值前还要消耗 ~N 根种子,
  * 有效衰减步数 ≈ (15-1)N,Wilder-N 衰减 14N 步 ≈ e^-14 ≈ 1e-6 ——
  * 远低于 2 位舍入界,.xx5 刀尖位也不会翻转(10× 时实测仍有单 bar ±0.01)。
+ *
+ * Review R3-12:倍增基数从全局 maxLookback 收窄为 maxRecursiveLookback
+ * (registry 按 recursive/emaBased 声明)—— 纯窗口型指标(SMA/BOLL/WR 等)
+ * 只看固定窗口,requiredBars 即精确,此前纯 ma:[250] 也被放大到 3750 根,
+ * 白算 3000+;混合组合(如 ma[250]+macd)按递归成员的周期放大(macd 87 →
+ * 1305),不再被窗口型的大周期(250 → 3750)绑架。
  */
 const RECURSIVE_WARMUP = 500;
 const WARMUP_LOOKBACK_MULTIPLIER = 15;
@@ -178,7 +184,8 @@ export class IndicatorService {
       ? this.normalizeUserDate(options.endDate)
       : undefined;
     const market = options.market ?? this.detectMarket(symbol);
-    const { requiredBars, maxLookback } = estimateIndicatorLookback(indicators);
+    const { requiredBars, maxRecursiveLookback } =
+      estimateIndicatorLookback(indicators);
     const ratioMap = { A: 1.5, HK: 1.46, US: 1.45 };
     let actualStartDate: string | undefined;
 
@@ -234,20 +241,22 @@ export class IndicatorService {
     // actualStartDate 之前本就没有更多历史(标的上市晚),refetch 只会拿回
     // 完全相同的数据 —— 每次调用白白双倍上游流量。
     //
-    // Review P1-4:间距判定只对【日线】成立 ——
-    // - 周/月线的标签在期末(月线首根可晚于起点 8~30 天),任何固定容差都会
-    //   误判'上市晚'而漏 refetch(实测月线窗口首段 kdj 全 null)→ 非日线
-    //   一律保守 refetch(查询频次低,多一次请求换正确性)。
-    // - 日线容差从 7 天放宽到 30 天:覆盖 A 股黄金周/春节(10-11 天)与多数
-    //   个股停牌;>30 天的长期停牌仍可能被误判(代价是窗口头部指标为 null),
-    //   属"流量换正确性"的已记录权衡。误判方向是宁可多 refetch。
+    // Review P1-4 → R3-14:容差按周期公式化 ——
+    // - 日线基础容差 30 天:覆盖 A 股黄金周/春节(10-11 天)与多数个股停牌;
+    //   >30 天的长期停牌仍可能被误判(代价是窗口头部指标为 null),属
+    //   "流量换正确性"的已记录权衡。误判方向是宁可多 refetch。
+    // - 周/月线的标签在期末(周线首根最多滞后起点 7 天、月线最多 31 天),
+    //   P1-4 曾因"固定容差必误判"一律保守 refetch;R3-14 把期末标签的最大
+    //   滞后并入公式(30 + 7/31),恢复 F35 短路对周/月线生效 —— 真 IPO
+    //   (首根晚于容差)不再每次双请求,误判方向仍是多 refetch。
     const period = options.period ?? 'daily';
+    const toleranceDays =
+      30 + (period === 'weekly' ? 7 : period === 'monthly' ? 31 : 0);
     const mayHaveEarlierData =
       allKlines.length === 0 ||
       actualStartDate === undefined ||
-      period !== 'daily' ||
       this.normalizeRowDate(allKlines[0].date) <=
-        addDays(this.normalizeRowDate(actualStartDate), 30);
+        addDays(this.normalizeRowDate(actualStartDate), toleranceDays);
 
     let refetchedFullHistory = false;
     if (startNorm && allKlines.length < requiredBars && mayHaveEarlierData) {
@@ -301,13 +310,18 @@ export class IndicatorService {
       // 累计型指标(OBV)依赖序列起点,切片会改变绝对值 —— 由 registry 的
       // cumulative 标记驱动(P2-7),新增累计型指标时无需改这里
       if (refetchedFullHistory && !hasCumulativeIndicator(indicators)) {
-        // refetch 触发条件含 length < requiredBars,requiredBars > 0 即必有指标,
-        // 故此分支总需要暖机 lookback;下限随最大周期成比例放大(P2-7)
-        const lookback = Math.max(
-          requiredBars,
-          RECURSIVE_WARMUP,
-          WARMUP_LOOKBACK_MULTIPLIER * maxLookback
-        );
+        // refetch 触发条件含 length < requiredBars,requiredBars > 0 即必有指标。
+        // R3-12:暖机下限只对【递归型】组合生效(P2-7 的比例放大基数改为
+        // maxRecursiveLookback);纯窗口型组合(maxRecursiveLookback=0)
+        // requiredBars 即精确,无需 500/15× 放大。
+        const lookback =
+          maxRecursiveLookback > 0
+            ? Math.max(
+                requiredBars,
+                RECURSIVE_WARMUP,
+                WARMUP_LOOKBACK_MULTIPLIER * maxRecursiveLookback
+              )
+            : requiredBars;
         toCompute = allKlines.slice(Math.max(0, windowStartIdx - lookback));
       }
       return addIndicators(toCompute, indicators).filter((item) => {

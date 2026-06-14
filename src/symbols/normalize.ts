@@ -70,8 +70,12 @@ const SECID_MAP: Record<string, { market: Market; exchange: Exchange }> = {
  * 北交所(adapters 的 EXCHANGE_TO_SECID_PREFIX 即 BSE→'0'),
  * '0.bj430047' 是自洽输入 —— bj 前缀恰是该有损前缀需要的消歧信息,
  * 不应被 exchange 级精确比较误判为矛盾。
+ *
+ * R3-14:导出仅供一致性测试使用(test/unit/symbols 反演 adapters 的
+ * EXCHANGE_TO_SECID_PREFIX,断言每个多交易所共享前缀都已在此登记),
+ * 不属于公共 API(未经 src/symbols/index.ts 再导出)。
  */
-const SECID_ADMISSIBLE_EXCHANGES: Record<string, Exchange[]> = {
+export const SECID_ADMISSIBLE_EXCHANGES: Record<string, Exchange[]> = {
   '0': ['SZSE', 'BSE'],
 };
 

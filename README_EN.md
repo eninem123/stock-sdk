@@ -216,9 +216,10 @@ try {
 For pure-compute use (indicators / symbols / signals / screener), import from a subpath so the bundle doesn't pull in `RequestClient` or any provider:
 
 ```ts
-// All 14 indicators ship pure functions: calcMA / calcEMA / calcMACD / calcBOLL /
-// calcKDJ / calcRSI / calcWR / calcBIAS / calcCCI / calcATR / calcOBV / calcROC /
-// calcDMI / calcSAR / calcKC
+// 14 indicators, 17 pure functions in total (the MA family ships calcSMA /
+// calcEMA / calcWMA variants): calcSMA / calcEMA / calcWMA / calcMA /
+// calcMACD / calcBOLL / calcKDJ / calcRSI / calcWR / calcBIAS / calcCCI /
+// calcATR / calcOBV / calcROC / calcDMI / calcSAR / calcKC
 import { calcMACD, calcKDJ } from 'stock-sdk/indicators';
 import { normalizeSymbol, toTencentSymbol } from 'stock-sdk/symbols';
 import { calcSignals } from 'stock-sdk/signals';

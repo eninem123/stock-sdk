@@ -13,7 +13,7 @@
 
 | 文件 | 体积 | Gzip |
 | --- | --- | --- |
-| `dist/index.js` | 3.53 KB | 1.60 KB |
+| `dist/index.js` | 3.53 KB | 1.61 KB |
 | `dist/index.cjs` | 5.06 KB | 1.70 KB |
 
 ## 请求治理能力
@@ -29,9 +29,9 @@
 | `rotateUserAgent` | `boolean` | 仅 Node.js 生效，自动轮换常见 UA 以降低频控概率。 |
 | `circuitBreaker` | `CircuitBreakerOptions` | 全局熔断器配置，连续失败后短暂停止请求。 |
 | `providerPolicies` | `Partial<Record<ProviderName, ProviderRequestPolicy>>` | 按 provider 单独覆盖超时、重试、限流、熔断和请求头策略。 |
-| `fetchImpl` | `unknown` | 可注入的自定义 fetch 实现（代理 / mock / 日志），默认运行时全局 fetch。 |
-| `signal` | `unknown` | client 级外部取消信号；触发后该实例全部在途请求归类为 ABORTED。 |
-| `hooks` | `unknown` | 请求生命周期钩子（onRequest/onResponse/onError/onRetry/trace），回调抛错不影响主流程。 |
+| `fetchImpl` | `FetchImpl` | 可注入的自定义 fetch 实现（代理 / mock / 日志），默认运行时全局 fetch。 |
+| `signal` | `AbortSignal` | client 级外部取消信号；触发后该实例全部在途请求归类为 ABORTED。 |
+| `hooks` | `RequestHooks` | 请求生命周期钩子（onRequest/onResponse/onError/onRetry/trace），回调抛错不影响主流程。 |
 
 ### Provider 策略覆盖
 
@@ -62,6 +62,8 @@
 - `kline.hk`
 - `kline.us`
 - `kline.cnMinute`
+- `kline.hkMinute`
+- `kline.usMinute`
 - `quotes.timeline`
 - `kline.withIndicators`
 
@@ -71,10 +73,12 @@
 - `board.industry.spot`
 - `board.industry.constituents`
 - `board.industry.kline`
+- `board.industry.minuteKline`
 - `board.concept.list`
 - `board.concept.spot`
 - `board.concept.constituents`
 - `board.concept.kline`
+- `board.concept.minuteKline`
 - `quotes.fundFlow`
 - `quotes.largeOrder`
 - `search`
@@ -154,6 +158,13 @@
 - `blockTrade.dailyStat`
 - `margin.accountInfo`
 - `margin.targetList`
+
+### 基金深度数据
+
+- `fund.dividendList`
+- `fund.navHistory`
+- `fund.estimate`
+- `fund.rankHistory`
 
 ## 相关页面
 

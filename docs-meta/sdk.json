@@ -107,6 +107,8 @@
           "kline.hk",
           "kline.us",
           "kline.cnMinute",
+          "kline.hkMinute",
+          "kline.usMinute",
           "quotes.timeline",
           "kline.withIndicators"
         ]
@@ -119,10 +121,12 @@
           "board.industry.spot",
           "board.industry.constituents",
           "board.industry.kline",
+          "board.industry.minuteKline",
           "board.concept.list",
           "board.concept.spot",
           "board.concept.constituents",
           "board.concept.kline",
+          "board.concept.minuteKline",
           "quotes.fundFlow",
           "quotes.largeOrder",
           "search",
@@ -224,8 +228,19 @@
           "margin.accountInfo",
           "margin.targetList"
         ]
+      },
+      {
+        "titleZh": "基金深度数据",
+        "titleEn": "Fund Deep Data",
+        "methods": [
+          "fund.dividendList",
+          "fund.navHistory",
+          "fund.estimate",
+          "fund.rankHistory"
+        ]
       }
-    ]
+    ],
+    "methodGroupExemptions": []
   },
   "forbiddenTokens": [
     "RateLimitOptions",

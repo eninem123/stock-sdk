@@ -216,7 +216,8 @@ try {
 只用纯计算（指标 / 符号 / 信号 / 选股）时，从 subpath 导入，bundle 不会拖入 `RequestClient` 与所有 provider：
 
 ```ts
-// 14 个指标全量提供纯函数:calcMA / calcEMA / calcMACD / calcBOLL / calcKDJ /
+// 14 个指标、共 17 个纯函数(MA 族含 calcSMA/calcEMA/calcWMA 三个变体):
+// calcSMA / calcEMA / calcWMA / calcMA / calcMACD / calcBOLL / calcKDJ /
 // calcRSI / calcWR / calcBIAS / calcCCI / calcATR / calcOBV / calcROC /
 // calcDMI / calcSAR / calcKC
 import { calcMACD, calcKDJ } from 'stock-sdk/indicators';

@@ -8,14 +8,44 @@
  *
  * dist 不存在时跳过(本地未构建的快速单测循环);CI 在 build 之后跑全量
  * 测试即可生效。
+ *
+ * R3-15 加固:
+ * - 新鲜度守卫:dist/index.cjs 比 src 下任一 .ts 旧 → 冒烟只会验证旧产物
+ *   (甚至对新代码的 bug 误绿),skip 并提示重建;CI build 紧接 test 永远新鲜。
+ * - Windows 可移植:动态 import 绝对路径必须走 file:// URL(pathToFileURL),
+ *   裸盘符路径(C:\...)在 Windows 的 ESM loader 下会抛 ERR_UNSUPPORTED_ESM_URL_SCHEME。
  */
 import { describe, it, expect } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 
 const DIST = join(__dirname, '../../dist');
+const SRC = join(__dirname, '../../src');
 const hasDist = existsSync(join(DIST, 'index.cjs')) && existsSync(join(DIST, 'index.js'));
+
+/** 递归取目录下全部 .ts 文件的最大 mtime(src 约 150 个文件,一次性 statSync 开销可忽略) */
+function maxTsMtimeMs(dir: string): number {
+  let max = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      max = Math.max(max, maxTsMtimeMs(full));
+    } else if (entry.isFile() && entry.name.endsWith('.ts')) {
+      max = Math.max(max, statSync(full).mtimeMs);
+    }
+  }
+  return max;
+}
+
+const distStale =
+  hasDist && statSync(join(DIST, 'index.cjs')).mtimeMs < maxTsMtimeMs(SRC);
+if (distStale) {
+  console.warn(
+    '[dist-smoke] dist 过期(src 存在比 dist/index.cjs 更新的 .ts),已跳过;yarn build 后生效'
+  );
+}
 
 const NAMESPACES = [
   'quotes', 'codes', 'batch', 'kline', 'board', 'options', 'futures',
@@ -23,7 +53,9 @@ const NAMESPACES = [
   'margin', 'fund', 'calendar', 'reference',
 ] as const;
 
-describe.skipIf(!hasDist)('dist 产物冒烟(构建后运行)', () => {
+describe.skipIf(!hasDist || distStale)(
+  `dist 产物冒烟(构建后运行)${distStale ? ' — dist 过期,yarn build 后生效' : ''}`,
+  () => {
   it('CJS: require 侧全部命名空间可访问、方法可调用', () => {
     const require_ = createRequire(__filename);
     const mod = require_(join(DIST, 'index.cjs'));
@@ -48,7 +80,8 @@ describe.skipIf(!hasDist)('dist 产物冒烟(构建后运行)', () => {
   });
 
   it('ESM: import 侧命名空间可访问', async () => {
-    const mod = await import(join(DIST, 'index.js'));
+    // R3-15:Windows 下动态 import 绝对路径必须是 file:// URL
+    const mod = await import(pathToFileURL(join(DIST, 'index.js')).href);
     const SDK = mod.StockSDK ?? mod.default;
     const sdk = new SDK();
     for (const ns of NAMESPACES) {
@@ -61,7 +94,10 @@ describe.skipIf(!hasDist)('dist 产物冒烟(构建后运行)', () => {
     const require_ = createRequire(__filename);
     for (const sub of ['indicators', 'symbols', 'signals', 'screener', 'errors', 'cache']) {
       expect(() => require_(join(DIST, `${sub}.cjs`)), `${sub}.cjs`).not.toThrow();
-      await expect(import(join(DIST, `${sub}.js`)), `${sub}.js`).resolves.toBeTruthy();
+      await expect(
+        import(pathToFileURL(join(DIST, `${sub}.js`)).href),
+        `${sub}.js`
+      ).resolves.toBeTruthy();
     }
   });
 });

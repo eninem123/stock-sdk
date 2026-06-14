@@ -129,6 +129,14 @@ function getRequestOptionType(optionName, docsMeta) {
       return 'CircuitBreakerOptions';
     case 'providerPolicies':
       return docsMeta.requestConfig.providerPoliciesType;
+    // R3-11:P0 给这三项补了说明但漏了类型 case,summary.md 渲染成 `unknown`。
+    // 类型字符串取 src/core/request.ts 中 RequestClientOptions 的真实声明。
+    case 'fetchImpl':
+      return 'FetchImpl';
+    case 'signal':
+      return 'AbortSignal';
+    case 'hooks':
+      return 'RequestHooks';
     default:
       return 'unknown';
   }

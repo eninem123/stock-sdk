@@ -156,7 +156,7 @@ export async function getQuotes(codes: string[]): Promise<Quote[]> {
 |------|------|------|
 | 文件名 | camelCase | `aShareKline.ts` |
 | 类名 | PascalCase | `StockSDK` |
-| 函数名 | camelCase | `quotes.cn` |
+| 函数名 | camelCase | `normalizeSymbol` |
 | 常量 | UPPER_SNAKE_CASE | `DEFAULT_TIMEOUT` |
 | 类型/接口 | PascalCase | `FullQuote` |
 

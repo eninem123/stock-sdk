@@ -6,7 +6,10 @@ import {
   normalizeSymbol,
   toEastmoneySecid,
   toTencentSymbol,
+  EXCHANGE_TO_SECID_PREFIX,
 } from '../../../src/symbols';
+// 非公共 API,仅供 R3-14 一致性测试直读(见 normalize.ts 导出注释)
+import { SECID_ADMISSIBLE_EXCHANGES } from '../../../src/symbols/normalize';
 import { InvalidSymbolError, InvalidArgumentError } from '../../../src/core';
 
 describe('#11 字母 ticker 不被 sh/sz/bj 前缀吞掉', () => {
@@ -348,5 +351,43 @@ describe('F25 secid 分支剥离冗余前缀 + 前缀/解析矛盾检测', () =>
 
   it("'SHW.US' 字母 ticker 不被当前缀剥离", () => {
     expect(normalizeSymbol('SHW.US').code).toBe('SHW');
+  });
+});
+
+describe('R3-14 SECID_ADMISSIBLE_EXCHANGES 与 adapters 前缀表一致性', () => {
+  // 反演 EXCHANGE_TO_SECID_PREFIX:共享同一 secid 前缀的【真实】交易所集合。
+  // 过滤规则按 adapters 现状:'US' 是“具体交易所未知”的占位键(105 与
+  // NASDAQ 同前缀属别名而非歧义,normalizeSymbol 解析 '105.' 也只产出
+  // NASDAQ),不参与歧义集反演;其余键均为 EXCHANGE_MARKET 已知的真实交易所。
+  const byPrefix = new Map<string, string[]>();
+  for (const [exchange, prefix] of Object.entries(EXCHANGE_TO_SECID_PREFIX)) {
+    if (exchange === 'US') continue;
+    byPrefix.set(prefix, [...(byPrefix.get(prefix) ?? []), exchange]);
+  }
+
+  it('每个多交易所共享前缀都已登记,且集合一致(新增共享前缀忘登记 → 红)', () => {
+    for (const [prefix, exchanges] of byPrefix) {
+      if (exchanges.length <= 1) continue;
+      expect(
+        SECID_ADMISSIBLE_EXCHANGES[prefix],
+        `有损前缀 '${prefix}'(${exchanges.join('/')})未登记进 SECID_ADMISSIBLE_EXCHANGES`
+      ).toBeDefined();
+      expect([...SECID_ADMISSIBLE_EXCHANGES[prefix]].sort()).toEqual(
+        [...exchanges].sort()
+      );
+    }
+    // 现状:'0' 是唯一的多交易所前缀(SZSE/BSE)
+    expect([...byPrefix.entries()].filter(([, ex]) => ex.length > 1)).toHaveLength(1);
+  });
+
+  it('登记表不含 adapters 中不存在的有损前缀(防腐烂方向)', () => {
+    for (const [prefix, admissible] of Object.entries(SECID_ADMISSIBLE_EXCHANGES)) {
+      const real = byPrefix.get(prefix) ?? [];
+      expect(
+        real.length,
+        `SECID_ADMISSIBLE_EXCHANGES['${prefix}'] 在 adapters 中已不是多交易所共享前缀`
+      ).toBeGreaterThan(1);
+      expect([...admissible].sort()).toEqual([...real].sort());
+    }
   });
 });
