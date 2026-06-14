@@ -92,6 +92,11 @@ export class IndicatorService {
     return `${year}${month}${day}`;
   }
 
+  /**
+   * @param startDate 已经 normalizeUserDate 归一过的 'YYYY-MM-DD'(R3-1:入口
+   *   前移校验后,本方法不再可能因日期格式抛错,外层 catch 恢复其本意 ——
+   *   只兜 getTradingCalendar 的网络失败)
+   */
   private calcActualStartDateByCalendar(
     startDate: string,
     tradingDays: number,
@@ -101,8 +106,7 @@ export class IndicatorService {
       return undefined;
     }
 
-    const normalized = this.normalizeDate(startDate);
-    let startIndex = calendar.findIndex((date) => date >= normalized);
+    let startIndex = calendar.findIndex((date) => date >= startDate);
     if (startIndex === -1) {
       startIndex = calendar.length - 1;
     }
@@ -110,13 +114,8 @@ export class IndicatorService {
     return this.toCompactDate(calendar[targetIndex]);
   }
 
-  /**
-   * 归一日期为 'YYYY-MM-DD'。接受 'YYYY-MM-DD[ HH:mm...]'(截取日期部分)与
-   * 'YYYYMMDD'。Review P1-6:此前对'含横线但非补零'的串('2024-5-1')原样放行,
-   * 在字典序比较下整窗丢失、进 addNaturalDays 还会抛裸 RangeError ——
-   * 现在非法格式直接抛 InvalidArgumentError(对外只抛 SdkError 契约)。
-   */
-  private normalizeDate(dateStr: string): string {
+  /** 尝试归一日期为 'YYYY-MM-DD';不识别的格式返回 null(由调用方决定抛错或容忍)。 */
+  private tryNormalizeDate(dateStr: string): string | null {
     const v = dateStr.trim();
     if (/^\d{4}-\d{2}-\d{2}/.test(v)) {
       return v.slice(0, 10);
@@ -124,10 +123,40 @@ export class IndicatorService {
     if (/^\d{8}$/.test(v)) {
       return `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}`;
     }
-    throw new InvalidArgumentError(
-      `日期格式应为 'YYYY-MM-DD' 或 'YYYYMMDD',得到 '${dateStr}'`,
-      { argument: 'date', value: dateStr }
-    );
+    return null;
+  }
+
+  /**
+   * 严格归一【用户入参】日期为 'YYYY-MM-DD'。接受 'YYYY-MM-DD[ HH:mm...]'(截取
+   * 日期部分)与 'YYYYMMDD'。Review P1-6:此前对'含横线但非补零'的串('2024-5-1')
+   * 原样放行,在字典序比较下整窗丢失、进日期加法还会抛裸 RangeError ——
+   * 非法格式直接抛 InvalidArgumentError(对外只抛 SdkError 契约)。
+   *
+   * Review R3-1:严格校验从 calcActualStartDateByCalendar 内部前移到
+   * getKlineWithIndicators 入口 —— 此前 A 股日历路径的兜底 catch(本意只兜
+   * getTradingCalendar 网络失败)会把它吞掉,'2024-5-1' 被切成 'NaNNaNNaN'
+   * 带着垃圾起点打真实上游(HK/US 还会触发全量 refetch 双请求),最终才在窗口
+   * 过滤处抛、错误信息展示 'NaNNaNNaN' 而非用户原值。现在非法入参【零上游请求】即拒。
+   */
+  private normalizeUserDate(dateStr: string): string {
+    const normalized = this.tryNormalizeDate(dateStr);
+    if (normalized === null) {
+      throw new InvalidArgumentError(
+        `日期格式应为 'YYYY-MM-DD' 或 'YYYYMMDD',得到 '${dateStr}'`,
+        { argument: 'date', value: dateStr }
+      );
+    }
+    return normalized;
+  }
+
+  /**
+   * 宽松归一【上游行】日期(R3-1):格式匹配则归一为 'YYYY-MM-DD',不匹配返回
+   * 原串照旧参与字典序比较 —— 对上游数据保持容忍:provider 个别行日期格式漂移
+   * (如 '2024/02/29')最多导致该行窗口归属/排序局部错,绝不中断整个请求、
+   * 更不把上游脏数据归咎为用户入参错误(严格版只用于用户入参,见 normalizeUserDate)。
+   */
+  private normalizeRowDate(dateStr: string): string {
+    return this.tryNormalizeDate(dateStr) ?? dateStr;
   }
 
   private toCompactDate(dateStr: string): string {
@@ -138,29 +167,40 @@ export class IndicatorService {
     symbol: string,
     options: KlineWithIndicatorsOptions = {}
   ): Promise<KlineWithIndicators<AnyHistoryKline>[]> {
-    const { startDate, endDate, indicators = {} } = options;
+    const { indicators = {} } = options;
+    // R3-1:用户日期入参在【任何上游请求之前】严格校验并归一('YYYY-MM-DD'),
+    // 非法格式立即 InvalidArgumentError(零上游请求);归一结果全程复用,
+    // 后续比较中的上游行日期(allKlines[*].date)则走宽松 normalizeRowDate。
+    const startNorm = options.startDate
+      ? this.normalizeUserDate(options.startDate)
+      : undefined;
+    const endNorm = options.endDate
+      ? this.normalizeUserDate(options.endDate)
+      : undefined;
     const market = options.market ?? this.detectMarket(symbol);
     const { requiredBars, maxLookback } = estimateIndicatorLookback(indicators);
     const ratioMap = { A: 1.5, HK: 1.46, US: 1.45 };
     let actualStartDate: string | undefined;
 
-    if (startDate) {
+    if (startNorm) {
       if (market === 'A') {
+        // 入口已归一,calcActualStartDateByCalendar 不会再因日期格式抛错,
+        // catch 维持原语义:只兜 getTradingCalendar 的网络失败(R3-1)
         try {
           const calendar = await this.quoteService.getTradingCalendar();
           actualStartDate =
-            this.calcActualStartDateByCalendar(startDate, requiredBars, calendar) ??
-            this.calcActualStartDate(startDate, requiredBars, ratioMap[market]);
+            this.calcActualStartDateByCalendar(startNorm, requiredBars, calendar) ??
+            this.calcActualStartDate(startNorm, requiredBars, ratioMap[market]);
         } catch {
           actualStartDate = this.calcActualStartDate(
-            startDate,
+            startNorm,
             requiredBars,
             ratioMap[market]
           );
         }
       } else {
         actualStartDate = this.calcActualStartDate(
-          startDate,
+          startNorm,
           requiredBars,
           ratioMap[market]
         );
@@ -173,7 +213,7 @@ export class IndicatorService {
       startDate: actualStartDate,
       // provider 透传到东方财富的 beg/end 仅接受 YYYYMMDD，
       // 这里统一归一化，避免 'YYYY-MM-DD' 入参导致 HK/US 返回 0 条
-      endDate: options.endDate ? this.toCompactDate(options.endDate) : undefined,
+      endDate: endNorm ? this.toCompactDate(endNorm) : undefined,
     };
 
     let allKlines: AnyHistoryKline[];
@@ -206,11 +246,11 @@ export class IndicatorService {
       allKlines.length === 0 ||
       actualStartDate === undefined ||
       period !== 'daily' ||
-      this.normalizeDate(allKlines[0].date) <=
-        addDays(this.normalizeDate(actualStartDate), 30);
+      this.normalizeRowDate(allKlines[0].date) <=
+        addDays(this.normalizeRowDate(actualStartDate), 30);
 
     let refetchedFullHistory = false;
-    if (startDate && allKlines.length < requiredBars && mayHaveEarlierData) {
+    if (startNorm && allKlines.length < requiredBars && mayHaveEarlierData) {
       refetchedFullHistory = true;
       switch (market) {
         case 'HK':
@@ -248,12 +288,9 @@ export class IndicatorService {
     // 启用时跳过切片以保持与旧实现(全量计算)一致。
     // 最终过滤统一为归一化日期字符串比较(ISO 字典序即时间序),
     // 消除逐 bar 的 new Date() 分配。
-    if (startDate) {
-      const startNorm = this.normalizeDate(startDate);
-      const endNorm = endDate ? this.normalizeDate(endDate) : undefined;
-
+    if (startNorm) {
       const windowStartIdx = allKlines.findIndex(
-        (kline) => this.normalizeDate(kline.date) >= startNorm
+        (kline) => this.normalizeRowDate(kline.date) >= startNorm
       );
       if (windowStartIdx === -1) {
         // 所有 K 线都早于 startDate → 窗口为空,任何指标计算都会被丢弃,直接短路
@@ -274,7 +311,7 @@ export class IndicatorService {
         toCompute = allKlines.slice(Math.max(0, windowStartIdx - lookback));
       }
       return addIndicators(toCompute, indicators).filter((item) => {
-        const date = this.normalizeDate(item.date);
+        const date = this.normalizeRowDate(item.date);
         return date >= startNorm && (endNorm === undefined || date <= endNorm);
       });
     }

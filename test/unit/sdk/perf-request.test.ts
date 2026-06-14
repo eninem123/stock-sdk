@@ -278,6 +278,7 @@ function makeService(klines: {
   return {
     service: new IndicatorService(klineService, quoteService),
     klineService,
+    quoteService,
   };
 }
 
@@ -439,17 +440,72 @@ describe('P2-7: 暖机下限随最大周期成比例放大 + 累计型由 regist
 
 describe('P1-6: 非法日期格式干净报错(不再裸 RangeError / 静默空窗)', () => {
   it.each(['2024-1-5', '2024/01/05', '2024-6-3', 'not-a-date'])(
-    "startDate '%s' → InvalidArgumentError",
+    "startDate '%s' → InvalidArgumentError 且零上游请求(R3-1 入口校验前移)",
     async (startDate) => {
-      const { service } = makeService({ A: genKlines(30) });
-      await expect(
-        service.getKlineWithIndicators('600519', {
+      const { service, klineService, quoteService } = makeService({ A: genKlines(30) });
+      const err = await service
+        .getKlineWithIndicators('600519', {
           startDate,
           indicators: { ma: { periods: [5] } },
         })
-      ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+        .catch((e) => e);
+      expect(err).toMatchObject({ code: 'INVALID_ARGUMENT' });
+      // R3-1:错误信息展示用户原值(此前 A 股日历路径裸 catch 吞掉严格校验,
+      // '2024-5-1' 被切成 'NaNNaNNaN' 打上游后才在窗口过滤处抛)
+      expect(String(err.message)).toContain(startDate);
+      // R3-1:非法入参必须在【任何上游请求之前】被拒(此前带垃圾起点打真实上游,
+      // HK/US 还会全量 refetch 双请求)
+      expect(klineService.getHistoryKline).toHaveBeenCalledTimes(0);
+      expect(klineService.getHKHistoryKline).toHaveBeenCalledTimes(0);
+      expect(klineService.getUSHistoryKline).toHaveBeenCalledTimes(0);
+      expect(quoteService.getTradingCalendar).toHaveBeenCalledTimes(0);
     }
   );
+
+  it('R3-1: 非法 endDate 同样入口即拒,零上游请求', async () => {
+    const { service, klineService, quoteService } = makeService({ A: genKlines(30) });
+    await expect(
+      service.getKlineWithIndicators('600519', {
+        startDate: '2024-06-03',
+        endDate: '2024-6-30',
+        indicators: { ma: { periods: [5] } },
+      })
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+    expect(klineService.getHistoryKline).toHaveBeenCalledTimes(0);
+    expect(quoteService.getTradingCalendar).toHaveBeenCalledTimes(0);
+  });
+
+  it('R3-1: HK 路径非法 startDate 同样零请求(此前还会触发全量 refetch 双请求)', async () => {
+    const { service, klineService } = makeService({ HK: genKlines(30) });
+    await expect(
+      service.getKlineWithIndicators('00700', {
+        market: 'HK',
+        startDate: '2024-5-1',
+        indicators: { ma: { periods: [5] } },
+      })
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+    expect(klineService.getHKHistoryKline).toHaveBeenCalledTimes(0);
+  });
+
+  it('R3-1: 上游行 date 格式漂移(如 2024/02/29)不中断请求,行保留原串(宽松归一)', async () => {
+    // 严格校验只作用于【用户入参】;上游行日期走宽松 normalizeRowDate ——
+    // provider 单行漂移最多局部窗口归属错,绝不归咎用户、不中断整个请求
+    // (修复前窗口过滤处对每行 normalizeDate 严格抛错,整请求 InvalidArgumentError)
+    const bars = genKlines(30);
+    const dirty = { ...bars[12], date: '2024/02/29' };
+    const withDirty = [...bars.slice(0, 12), dirty, ...bars.slice(13)];
+    const { service } = makeService({ A: withDirty });
+
+    const rows = await service.getKlineWithIndicators('600519', {
+      startDate: bars[5].date,
+      indicators: {},
+    });
+
+    // 干净行照常过滤;脏行('2024/...' 字典序大于一切 '2023-...')留在窗口内且原串保留
+    expect(rows).toHaveLength(25);
+    expect(rows[0].date).toBe(bars[5].date);
+    expect(rows.some((r) => r.date === '2024/02/29')).toBe(true);
+  });
 
   it('合法格式(YYYY-MM-DD / YYYYMMDD / 含时间)照常工作', async () => {
     const bars = genKlines(30);

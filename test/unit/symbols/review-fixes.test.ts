@@ -212,6 +212,110 @@ describe('F24 exchange hint 与解析结果矛盾时抛错(不再产出矛盾对
   });
 });
 
+describe('R3-4 同市场 exchange hint 与语法确定的交易所矛盾 → 抛错(不再静默覆盖)', () => {
+  it("'600519.SH' + {exchange:'SZSE'} → InvalidSymbolError(此前产出 SZSE/600519,toTencentSymbol 拼错 sz600519)", () => {
+    expect(() => normalizeSymbol('600519.SH', { exchange: 'SZSE' })).toThrow(
+      InvalidSymbolError
+    );
+  });
+
+  it("'0.bj430047' + {exchange:'SZSE'} → InvalidSymbolError(bj 前缀已把有损 secid '0' 消歧为 BSE,打回 P2-9 修掉的 sz430047)", () => {
+    expect(() => normalizeSymbol('0.bj430047', { exchange: 'SZSE' })).toThrow(
+      InvalidSymbolError
+    );
+  });
+
+  it('sh/sz/bj 字母前缀与点分 secid 同样确定', () => {
+    expect(() => normalizeSymbol('sh600519', { exchange: 'SZSE' })).toThrow(
+      InvalidSymbolError
+    );
+    expect(() => normalizeSymbol('1.600519', { exchange: 'SZSE' })).toThrow(
+      InvalidSymbolError
+    );
+  });
+
+  it("合法消歧不回归:美股 'US' 是占位推断,'AAPL'/'usAAPL'/'aapl.US' + {exchange:'NASDAQ'} 照常覆盖", () => {
+    expect(normalizeSymbol('AAPL', { exchange: 'NASDAQ' }).exchange).toBe('NASDAQ');
+    expect(normalizeSymbol('usAAPL', { exchange: 'NASDAQ' }).exchange).toBe('NASDAQ');
+    expect(normalizeSymbol('aapl.US', { exchange: 'NYSE' }).exchange).toBe('NYSE');
+  });
+
+  it('合法消歧不回归:纯数字分支 exchange 是推断值,hint 仍可覆盖;一致 hint 无矛盾', () => {
+    // inferAShareExchange 把 '000001' 推断为 SZSE,用户显式纠偏仍允许(消歧语义)
+    expect(normalizeSymbol('000001', { exchange: 'BSE' }).exchange).toBe('BSE');
+    expect(normalizeSymbol('600519', { exchange: 'SSE' }).exchange).toBe('SSE');
+    expect(normalizeSymbol('00700', { exchange: 'HKEX' }).exchange).toBe('HKEX');
+  });
+});
+
+describe('R3-5 assetType hint 与语法确定的资产类型矛盾 → 抛错', () => {
+  it("'90.BK0475' + {assetType:'stock'} → InvalidSymbolError(此前覆盖成 stock 拼出 1.BK0475 垃圾查询)", () => {
+    expect(() => normalizeSymbol('90.BK0475', { assetType: 'stock' })).toThrow(
+      InvalidSymbolError
+    );
+  });
+
+  it("'CFFEX.IF2412' + {assetType:'stock'} → InvalidSymbolError(期货语法确定)", () => {
+    expect(() => normalizeSymbol('CFFEX.IF2412', { assetType: 'stock' })).toThrow(
+      InvalidSymbolError
+    );
+  });
+
+  it("'600519' + {assetType:'board'} → InvalidSymbolError(股票形状的码不可能是板块,此前拼出 90.600519)", () => {
+    expect(() => normalizeSymbol('600519', { assetType: 'board' })).toThrow(
+      InvalidSymbolError
+    );
+  });
+
+  it("'600519' + {assetType:'futures'} → InvalidSymbolError(纯数字不可能是期货合约)", () => {
+    expect(() => normalizeSymbol('600519', { assetType: 'futures' })).toThrow(
+      InvalidSymbolError
+    );
+  });
+
+  it("合法消歧不回归:fund/index 对推断 'stock' 的覆盖照旧(quotes.fund 链路)", () => {
+    expect(normalizeSymbol('510050', { assetType: 'fund' }).assetType).toBe('fund');
+    expect(normalizeSymbol('000300', { assetType: 'index' }).assetType).toBe('index');
+  });
+
+  it("合法路径不回归:裸合约 + {assetType:'futures'} / 一致 hint 照常", () => {
+    expect(normalizeSymbol('rb2510', { assetType: 'futures' }).assetType).toBe('futures');
+    expect(normalizeSymbol('90.BK0475', { assetType: 'board' }).assetType).toBe('board');
+    expect(
+      normalizeSymbol('CFFEX.IF2412', { assetType: 'futures' }).assetType
+    ).toBe('futures');
+  });
+});
+
+describe("R3-6 纯数字 '0.' secid 用 inferAShareExchange 细化(与裸码解析一致)", () => {
+  it("'0.430047' → BSE,toTencentSymbol 拼出 bj430047(此前固定 SZSE 拼错 sz430047,与裸 '430047' 矛盾)", () => {
+    const ns = normalizeSymbol('0.430047');
+    expect(ns).toMatchObject({ market: 'CN', exchange: 'BSE', code: '430047' });
+    expect(toTencentSymbol(ns)).toBe('bj430047');
+    // 与裸码解析一致
+    expect(normalizeSymbol('430047').exchange).toBe('BSE');
+  });
+
+  it("'0.000001' → SZSE 不变", () => {
+    expect(normalizeSymbol('0.000001')).toMatchObject({
+      exchange: 'SZSE',
+      code: '000001',
+    });
+  });
+
+  it("'0.920819' → BSE(92 段新代码)", () => {
+    expect(normalizeSymbol('0.920819').exchange).toBe('BSE');
+  });
+
+  it("'0.600519'(infer 给 SSE,不在 '0' 可容集)→ 保守维持 SZSE 原行为,不抛错", () => {
+    expect(normalizeSymbol('0.600519').exchange).toBe('SZSE');
+  });
+
+  it('细化值属推断:exchange hint 仍可在可容集内消歧覆盖', () => {
+    expect(normalizeSymbol('0.430047', { exchange: 'SZSE' }).exchange).toBe('SZSE');
+  });
+});
+
 describe('F25 secid 分支剥离冗余前缀 + 前缀/解析矛盾检测', () => {
   it("'1.sh600519' → code 600519（修复 PR#38 同款问题的隔壁分支）", () => {
     const ns = normalizeSymbol('1.sh600519');

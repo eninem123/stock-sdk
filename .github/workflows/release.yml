@@ -48,8 +48,8 @@ jobs:
       - name: Typecheck, test & build
         run: |
           yarn typecheck
-          yarn test
           yarn build
+          yarn test
 
       # provenance 由 package.json 的 publishConfig.provenance: true 自动开启；
       # 用 npm publish（yarn 1.x 的 publish 不支持 provenance）。

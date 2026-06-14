@@ -12,6 +12,7 @@ import { marketOf, normalizeSymbol, toTencentSymbol } from '../symbols';
 import { toNumberArray, invokeMethod } from './dispatch';
 import type { StockSDK } from '../sdk';
 import { CliUsageError } from './errors';
+import { InvalidSymbolError } from '../core/errors';
 import type { CommandSpec, InvokeContext, OptionSpec, PositionalSpec } from './types';
 import {
   METHOD_SPECS,
@@ -210,7 +211,18 @@ export const ALIAS_COMMANDS: CommandSpec[] = [
             : normalizeSymbol(c);
           if (!forced) tag = ns.market === 'HK' ? 'hk' : ns.market === 'US' ? 'us' : 'a';
           groups[tag].push(tag === 'a' ? toTencentSymbol(ns) : ns.code);
-        } catch {
+        } catch (e) {
+          // R3-7:区分两类解析失败 ——
+          // (a) 代码本身可解析(marketOf 给得出市场),却在 forced --market 下抛
+          //     InvalidSymbolError:这是 P1-3 的「强制市场与代码确定性解析矛盾」
+          //     (如 --market hk + 'sh600519'),必须浮出为干净 CLI 错误;此前被
+          //     裸 catch 吞掉,'sh600519' 原样塞进 HK 组拉回垃圾查询。
+          // (b) 代码本身就解析不了(裸期货合约/特殊写法/'@@' 等):维持原样透传
+          //     语义,原码塞进当前市场组交由上游接口判定(自动识别路径与
+          //     forced 路径一致)。
+          if (forced && e instanceof InvalidSymbolError && marketOf(c) !== undefined) {
+            throw e;
+          }
           groups[tag].push(c);
         }
       }

@@ -4,6 +4,7 @@ import { findCommand } from '../../../src/cli/manifest';
 import type { StockSDK } from '../../../src/sdk';
 import type { InvokeContext } from '../../../src/cli/types';
 import { CliUsageError } from '../../../src/cli/errors';
+import { InvalidSymbolError } from '../../../src/core';
 
 /** 用嵌套 mock 构造一个「足够 dispatch 动态访问」的伪 SDK，并返回被调函数引用。 */
 function call(
@@ -155,6 +156,28 @@ describe('dispatch — argShape 实参组装', () => {
     expect(cn).toHaveBeenCalledWith(['sh600519', '@@']);
     expect(hk).toHaveBeenCalledWith(['00700', '00700']);
     expect(us).toHaveBeenCalledWith(['AAPL']);
+  });
+
+  it('R3-7 quote --market hk + 确定性矛盾代码(sh600519) → InvalidSymbolError 浮出(不再静默塞进 HK 组)', async () => {
+    const hk = vi.fn().mockResolvedValue([]);
+    const sdk = { quotes: { hk } } as unknown as StockSDK;
+    const m = findCommand(['quote', 'sh600519'])!;
+    await expect(
+      dispatch(sdk, m.spec, { positional: ['sh600519'], options: { market: 'hk' } })
+    ).rejects.toBeInstanceOf(InvalidSymbolError);
+    expect(hk).not.toHaveBeenCalled();
+  });
+
+  it('R3-7 quote --market hk:一致代码正常分组,不可解析代码维持原样透传(两类失败区分)', async () => {
+    const hk = vi.fn().mockResolvedValue([]);
+    const sdk = { quotes: { hk } } as unknown as StockSDK;
+    const m = findCommand(['quote', '00700'])!;
+    // '00700' 正常解析;'@@' 本身不可解析(marketOf undefined)→ 不算矛盾,原样进组
+    await dispatch(sdk, m.spec, {
+      positional: ['00700', '@@'],
+      options: { market: 'hk' },
+    });
+    expect(hk).toHaveBeenCalledWith(['00700', '@@']);
   });
 
   it('P2-2 call quotes.cn --args 原始直通', async () => {

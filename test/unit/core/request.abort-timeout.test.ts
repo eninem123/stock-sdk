@@ -163,6 +163,72 @@ describe('P2-8 自定义 fetchImpl 不透传 reason 时超时仍归 TIMEOUT', ()
   });
 });
 
+describe('R3-2 不监听 signal 的 fetchImpl:超时/取消仍能解除挂起', () => {
+  /** naive wrapper / axios 适配风格:完全无视 init.signal,promise 永不 settle */
+  function deafFetch(): typeof fetch {
+    return vi.fn(
+      () => new Promise<Response>(() => {})
+    ) as unknown as typeof fetch;
+  }
+
+  it('超时 → ~timeout 内拒绝且 code TIMEOUT、fetch 只调用一次(此前永不 settle,调用方无限挂起)', async () => {
+    const f = deafFetch();
+    const client = new RequestClient({
+      fetchImpl: f,
+      timeout: 200,
+      retry: { maxRetries: 2, retryOnTimeout: false, baseDelay: 1 },
+    });
+    const startedAt = Date.now();
+    const err = await client.get('https://example.com/a').catch((e) => e);
+    expect(err.code).toBe('TIMEOUT');
+    // 修复前这里永远等不到拒绝(测试以 vitest 超时失败);放宽到 1.5s 防 CI 抖动
+    expect(Date.now() - startedAt).toBeLessThan(1500);
+    expect(f).toHaveBeenCalledOnce();
+  });
+
+  it('外部 abort 同样解除挂起 → ABORTED(retry/熔断/hooks 链路恢复可达)', async () => {
+    const f = deafFetch();
+    const controller = new AbortController();
+    const client = new RequestClient({
+      fetchImpl: f,
+      timeout: 60_000,
+      retry: { maxRetries: 2, baseDelay: 1 },
+    });
+    const pending = client
+      .get('https://example.com/a', { signal: controller.signal })
+      .catch((e) => e);
+    controller.abort(new Error('stop'));
+    const err = await pending;
+    expect(err).toBeInstanceOf(AbortedError);
+    expect(err.code).toBe('ABORTED');
+    expect(f).toHaveBeenCalledOnce();
+  });
+
+  it('预先已取消的 signal:不监听 signal 的 fetchImpl 也立即 ABORTED', async () => {
+    const controller = new AbortController();
+    controller.abort('cancelled before start');
+    const client = new RequestClient({
+      fetchImpl: deafFetch(),
+      timeout: 60_000,
+      retry: { maxRetries: 0 },
+    });
+    const err = await client
+      .get('https://example.com/a', { signal: controller.signal })
+      .catch((e) => e);
+    expect(err.code).toBe('ABORTED');
+  });
+
+  it('正常返回但不监听 signal 的 fetchImpl 行为不变(race 不影响成功路径)', async () => {
+    const f = vi.fn(async () => new Response('ok')) as unknown as typeof fetch;
+    const client = new RequestClient({
+      fetchImpl: f,
+      timeout: 1000,
+      retry: { maxRetries: 0 },
+    });
+    await expect(client.get('https://example.com/a')).resolves.toBe('ok');
+  });
+});
+
 describe('F4 ABORTED 不计入失败记账', () => {
   it('连续取消不会把熔断器打开', async () => {
     let mode: 'hang' | 'ok' = 'hang';

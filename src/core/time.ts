@@ -207,7 +207,7 @@ function displayedWallUtc(tsUtc: number, tz: string): number {
  * DST two-pass 修复让每次换算做两次 Intl.formatToParts(采样+验证),
  * 而 Asia/Shanghai / Asia/Hong_Kong 是固定时差时区,验证永远命中纯属白付
  * (实测 5800 行批量解析 Intl 开销 14.2ms→28.4ms 翻倍)。
- * 每 (tz, 年) 首次使用时按 1/4/7/10 月四点采样:全年偏移一致 → 缓存该偏移,
+ * 每 (tz, 年) 首次使用时逐月采样:全年偏移一致 → 缓存该偏移,
  * 后续同年行【零 Intl 调用】直接做差(比修复前的单遍还快);
  * 不一致(DST 年,如 America/New_York、Asia/Shanghai 1986-1991)→ 缓存 null,
  * 逐行走 two-pass。
@@ -222,10 +222,23 @@ function fixedOffsetForYear(tz: string, year: number): number | null {
   const key = `${tz}|${year}`;
   let cached = FIXED_OFFSET_CACHE.get(key);
   if (cached === undefined) {
-    const samples = [0, 3, 6, 9].map((month) =>
-      offsetAt(Date.UTC(year, month, 1, 12), tz)
-    );
-    cached = samples.every((o) => o === samples[0]) ? samples[0] : null;
+    // R3-3:逐月采样(每月 1 日 12:00 UTC,12 次 formatToParts,每 (tz,年) 一次性
+    // 成本可忽略)。此前 1/4/7/10 月四点采样有盲区:香港 1974(夏令时
+    // 1973-12-30 → 1974-10-20)四个采样点全 +9 → 全年被误缓存为固定 +9,
+    // 10-20 之后的两个多月快路径整体偏 1 小时;任何落在 10-01 之后的年内转换通杀。
+    // 逐月采样下,月中转换必使该月 1 日与下月 1 日偏移不等 → 正确判非固定。
+    // 如实记录的残余盲区(不在支持时区 CN/HK/NY 的现实历史中,出现需扩 tz 时再议):
+    // - 同一个月内「转换 + 回切」的奇异规则(相邻月 1 日仍相等);
+    // - 12 月 3 日~29 日之间的单次转换(12-01 之后再无采样点;12-30/31 与
+    //   1-01/02 已由 wallTimeToUTC 的跨年边界守卫兜走 two-pass)。
+    let fixed: number | null = offsetAt(Date.UTC(year, 0, 1, 12), tz);
+    for (let month = 1; month < 12; month++) {
+      if (offsetAt(Date.UTC(year, month, 1, 12), tz) !== fixed) {
+        fixed = null;
+        break;
+      }
+    }
+    cached = fixed;
     FIXED_OFFSET_CACHE.set(key, cached);
   }
   return cached;
