@@ -69,6 +69,25 @@ function extractSdkMethods(source) {
   return [...methods];
 }
 
+/**
+ * v2 命名空间方法面来自唯一事实源 src/spec/methods.ts(CLI/MCP 同源派生),
+ * 文档闸门同样从 spec 提取点分方法名(quotes.cn 等),
+ * 与 sdk.ts 顶层方法(search)合并构成完整 SDK 方法面。
+ */
+function extractSpecMethodPaths(specSource) {
+  const paths = new Set();
+  for (const match of specSource.matchAll(/path:\s*\[([^\]]+)\]/g)) {
+    const parts = match[1]
+      .split(',')
+      .map((part) => part.trim().replace(/^['"]|['"]$/g, ''))
+      .filter(Boolean);
+    if (parts.length > 0) {
+      paths.add(parts.join('.'));
+    }
+  }
+  return [...paths];
+}
+
 async function collectBuildArtifact(relativePath) {
   const absolutePath = path.join(rootDir, relativePath);
   try {
@@ -110,6 +129,14 @@ function getRequestOptionType(optionName, docsMeta) {
       return 'CircuitBreakerOptions';
     case 'providerPolicies':
       return docsMeta.requestConfig.providerPoliciesType;
+    // R3-11:P0 给这三项补了说明但漏了类型 case,summary.md 渲染成 `unknown`。
+    // 类型字符串取 src/core/request.ts 中 RequestClientOptions 的真实声明。
+    case 'fetchImpl':
+      return 'FetchImpl';
+    case 'signal':
+      return 'AbortSignal';
+    case 'hooks':
+      return 'RequestHooks';
     default:
       return 'unknown';
   }
@@ -220,7 +247,7 @@ export async function generateDocMeta(options = {}) {
     indicatorTypesSource,
     indicatorIndexSource,
     sdkSource,
-  ] =
+      specSource,] =
     await Promise.all([
       readJson('package.json'),
       readJson('docs-meta/sdk.json'),
@@ -229,6 +256,7 @@ export async function generateDocMeta(options = {}) {
       readText('src/indicators/types.ts'),
       readText('src/indicators/index.ts'),
       readText('src/sdk.ts'),
+      readText('src/spec/methods.ts'),
     ]);
 
   const indicatorOptionsBody = extractInterfaceBody(
@@ -266,7 +294,12 @@ export async function generateDocMeta(options = {}) {
       calcMethods: indicatorExports,
     },
     sdk: {
-      methods: extractSdkMethods(sdkSource),
+      methods: [
+        ...new Set([
+          ...extractSpecMethodPaths(specSource),
+          ...extractSdkMethods(sdkSource),
+        ]),
+      ],
     },
     build: {
       indexJs,

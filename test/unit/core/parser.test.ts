@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { decodeGBK, parseResponse, safeNumber, safeNumberOrNull } from '../../../src/utils';
+import { decodeGBK, parseResponse, safeNumber, safeNumberOrNull } from '../../../src/core';
+import { toNumber, toFiniteNumberOrNull } from '../../../src/core/parser';
 
 describe('core parser utilities', () => {
   describe('decodeGBK', () => {
@@ -75,6 +76,55 @@ describe('core parser utilities', () => {
 
     it('should return null for NaN', () => {
       expect(safeNumberOrNull('abc')).toBeNull();
+    });
+
+    // F44: '--' 占位符集中识别(此前 parseFloat NaN 兜底,现显式契约)
+    it('should return null for double-dash placeholder', () => {
+      expect(safeNumberOrNull('--')).toBeNull();
+    });
+  });
+
+  describe('toNumber placeholder 集中识别 (F44)', () => {
+    it("returns null for '-' and '--'", () => {
+      expect(toNumber('-')).toBeNull();
+      expect(toNumber('--')).toBeNull();
+    });
+
+    it('keeps parseFloat prefix semantics (与 toFiniteNumberOrNull 的关键差异)', () => {
+      expect(toNumber('1.5abc')).toBe(1.5);
+    });
+  });
+
+  describe('toFiniteNumberOrNull (F44: 收编 fund.ts 局部解析器)', () => {
+    it('parses plain numeric strings', () => {
+      expect(toFiniteNumberOrNull('1.6210')).toBe(1.621);
+      expect(toFiniteNumberOrNull('-0.59')).toBe(-0.59);
+      expect(toFiniteNumberOrNull('0')).toBe(0);
+    });
+
+    it('passes finite numbers through, rejects non-finite', () => {
+      expect(toFiniteNumberOrNull(42)).toBe(42);
+      expect(toFiniteNumberOrNull(Infinity)).toBeNull();
+      expect(toFiniteNumberOrNull(NaN)).toBeNull();
+    });
+
+    it('returns null for null / undefined / placeholders', () => {
+      expect(toFiniteNumberOrNull(null)).toBeNull();
+      expect(toFiniteNumberOrNull(undefined)).toBeNull();
+      expect(toFiniteNumberOrNull('')).toBeNull();
+      expect(toFiniteNumberOrNull('-')).toBeNull();
+      expect(toFiniteNumberOrNull('--')).toBeNull();
+    });
+
+    it('rejects trailing garbage (Number 严格语义,非 parseFloat 前缀)', () => {
+      expect(toFiniteNumberOrNull('1.2%')).toBeNull();
+      expect(toFiniteNumberOrNull('3元')).toBeNull();
+      expect(toFiniteNumberOrNull('abc')).toBeNull();
+    });
+
+    it('rejects Infinity strings (Number.isFinite 校验)', () => {
+      expect(toFiniteNumberOrNull('Infinity')).toBeNull();
+      expect(toFiniteNumberOrNull('-Infinity')).toBeNull();
     });
   });
 });

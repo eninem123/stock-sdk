@@ -7,9 +7,7 @@ import {
   EM_TRENDS_URL,
   EM_PUSH_TOKEN,
   assertKlinePeriod,
-  assertMinutePeriod,
   assertAdjustType,
-  toNumber,
   getPeriodCode,
   getAdjustCode,
   buildTimeMeta,
@@ -17,6 +15,7 @@ import {
 } from '../../core';
 import type { HistoryKline, MinuteTimeline, MinuteKline } from '../../types';
 import { normalizeSymbol, toEastmoneySecid } from '../../symbols';
+import { createMinuteKlineProvider } from './minuteKlineFactory';
 import { fetchEmHistoryKline, parseEmKlineCsv } from './utils';
 
 export interface HistoryKlineOptions {
@@ -115,6 +114,39 @@ export async function getHistoryKline(
   });
 }
 
+// F45:分钟K线流程收编进 createMinuteKlineProvider 工厂,A 股差异点:
+// secid 走 symbols 层 CN 归一、ndays 固定 '5'、行时间即北京时间
+// (buildTimeMeta CN 解析,F34 的 beg/end 日期可整天直推,无需 endExtraDays)。
+const getMinuteKlineByFactory = createMinuteKlineProvider<
+  MinuteTimeline,
+  MinuteKline
+>({
+  trendsUrl: EM_TRENDS_URL,
+  klineUrl: EM_KLINE_URL,
+  resolveTarget: (symbol) => {
+    const ns = normalizeSymbol(symbol, { market: 'CN' });
+    return { secid: toEastmoneySecid(ns), code: ns.code };
+  },
+  defaultPeriod: '1',
+  ndays: { fixed: '5' },
+  fqt: 'option',
+  includeUt: true,
+  window: { mode: 'filter' },
+  mapTrendRow: ({ time, ...nums }) => {
+    const meta = buildTimeMeta(time, MARKET_TZ.CN);
+    return { time, timestamp: meta.timestamp, tz: meta.tz, ...nums };
+  },
+  mapKlineRow: (item) => {
+    const meta = buildTimeMeta(item.date, MARKET_TZ.CN);
+    return {
+      ...item,
+      time: item.date, // 分钟线的第一列是时间
+      timestamp: meta.timestamp,
+      tz: meta.tz,
+    } as MinuteKline;
+  },
+});
+
 /**
  * 获取 A 股分钟 K 线或分时数据
  */
@@ -123,100 +155,5 @@ export async function getMinuteKline(
   symbol: string,
   options: MinuteKlineOptions = {}
 ): Promise<MinuteTimeline[] | MinuteKline[]> {
-  const {
-    period = '1',
-    adjust = 'qfq',
-    startDate = '1979-09-01 09:32:00',
-    endDate = '2222-01-01 09:32:00',
-  } = options;
-  assertMinutePeriod(period);
-  assertAdjustType(adjust);
-
-  const secid = toEastmoneySecid(normalizeSymbol(symbol, { market: 'CN' }));
-
-  if (period === '1') {
-    // 1 分钟分时数据，使用 trends2/get 接口
-    const params = new URLSearchParams({
-      fields1: 'f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13',
-      fields2: 'f51,f52,f53,f54,f55,f56,f57,f58',
-      ut: EM_PUSH_TOKEN,
-      ndays: '5',
-      iscr: '0',
-      secid,
-    });
-
-    const url = `${EM_TRENDS_URL}?${params.toString()}`;
-    const json = await client.get<any>(url, { responseType: 'json' });
-
-    const trends: string[] | undefined = json?.data?.trends;
-    if (!Array.isArray(trends) || trends.length === 0) {
-      return [];
-    }
-
-    // 时间范围过滤
-    const start = startDate.replace('T', ' ').slice(0, 16);
-    let end = endDate.replace('T', ' ').slice(0, 16);
-    // 仅日期（YYYY-MM-DD，10 位）时补到当天 23:59，否则字符串比较下
-    // 'YYYY-MM-DD HH:mm' > 'YYYY-MM-DD' 会把当天所有分钟行整天误过滤
-    if (end.length === 10) end += ' 23:59';
-
-    return trends
-      .map((line) => {
-        const [time, open, close, high, low, volume, amount, avgPrice] =
-          line.split(',');
-        const meta = buildTimeMeta(time, MARKET_TZ.CN);
-        return {
-          time,
-          timestamp: meta.timestamp,
-          tz: meta.tz,
-          open: toNumber(open),
-          close: toNumber(close),
-          high: toNumber(high),
-          low: toNumber(low),
-          volume: toNumber(volume),
-          amount: toNumber(amount),
-          avgPrice: toNumber(avgPrice),
-        } as MinuteTimeline;
-      })
-      .filter((row) => row.time >= start && row.time <= end);
-  } else {
-    // 5/15/30/60 分钟 K 线，使用 kline/get 接口
-    const params = new URLSearchParams({
-      fields1: 'f1,f2,f3,f4,f5,f6',
-      fields2: 'f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61',
-      ut: EM_PUSH_TOKEN,
-      klt: period,
-      fqt: getAdjustCode(adjust || ''), // 分钟线如果不传 adjust，默认为不复权？这里原代码 adjust 可选
-      secid,
-      beg: '0',
-      end: '20500000',
-    });
-
-    const url = EM_KLINE_URL;
-    const { klines } = await fetchEmHistoryKline(client, url, params);
-
-    if (klines.length === 0) {
-      return [];
-    }
-
-    // 时间范围过滤
-    const start = startDate.replace('T', ' ').slice(0, 16);
-    let end = endDate.replace('T', ' ').slice(0, 16);
-    // 仅日期（YYYY-MM-DD，10 位）时补到当天 23:59，否则字符串比较下
-    // 'YYYY-MM-DD HH:mm' > 'YYYY-MM-DD' 会把当天所有分钟行整天误过滤
-    if (end.length === 10) end += ' 23:59';
-
-    return klines
-      .map((line) => {
-        const item = parseEmKlineCsv(line);
-        const meta = buildTimeMeta(item.date, MARKET_TZ.CN);
-        return {
-          ...item,
-          time: item.date, // 分钟线的第一列是时间
-          timestamp: meta.timestamp,
-          tz: meta.tz,
-        } as MinuteKline;
-      })
-      .filter((row) => row.time >= start && row.time <= end);
-  }
+  return getMinuteKlineByFactory(client, symbol, options);
 }

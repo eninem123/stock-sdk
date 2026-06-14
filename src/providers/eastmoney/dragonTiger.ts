@@ -13,6 +13,7 @@ import type {
   DragonTigerSeatItem,
 } from '../../types';
 import { fetchDatacenterList, parseDcDate } from './datacenter';
+import { toIsoDate } from './utils';
 
 /** 龙虎榜统计周期 → STATISTICS_CYCLE 映射 */
 const PERIOD_MAP: Record<DragonTigerPeriod, string> = {
@@ -21,16 +22,6 @@ const PERIOD_MAP: Record<DragonTigerPeriod, string> = {
   '6month': '03',
   '1year': '04',
 };
-
-/**
- * 把 YYYYMMDD 转为 YYYY-MM-DD（datacenter filter 要求横线格式）。
- */
-function toIsoDate(date: string): string {
-  if (/^\d{8}$/.test(date)) {
-    return `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`;
-  }
-  return date;
-}
 
 /**
  * 获取龙虎榜详情

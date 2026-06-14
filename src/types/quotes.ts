@@ -29,7 +29,7 @@ export interface FullQuote {
   ask: { price: number; volume: number }[];
   /** 行情时间(原始字符串,腾讯接口格式 `yyyyMMddHHmmss`,市场时区) */
   time: string;
-  /** 行情时间对应的 UTC unix 毫秒时间戳;无法解析时为 `NaN` */
+  /** 行情时间对应的 UTC unix 毫秒时间戳;无法解析时为 `null` */
   timestamp: number | null;
   /** 行情时间所属市场时区 (`Asia/Shanghai`) */
   tz: MarketTz;
@@ -135,7 +135,7 @@ export interface FundFlow {
   name: string;
   /** 数据日期(原始字符串,A 股时区) */
   date: string;
-  /** 数据日期对应当日 00:00 (`Asia/Shanghai`) 的 UTC 毫秒时间戳;无法解析时为 `NaN` */
+  /** 数据日期对应当日 00:00 (`Asia/Shanghai`) 的 UTC 毫秒时间戳;无法解析时为 `null` */
   timestamp: number | null;
   /** 数据日期所属时区 (`Asia/Shanghai`) */
   tz: MarketTz;}
@@ -166,7 +166,7 @@ export interface HKQuote {
   volume: number;
   /** 行情时间(原始字符串,腾讯接口格式 `yyyyMMddHHmmss`,港股时区) */
   time: string;
-  /** UTC unix 毫秒时间戳;无法解析时为 `NaN` */
+  /** UTC unix 毫秒时间戳;无法解析时为 `null` */
   timestamp: number | null;
   /** 行情时间所属市场时区 (`Asia/Hong_Kong`) */
   tz: MarketTz;
@@ -204,7 +204,7 @@ export interface USQuote {
   volume: number;
   /** 行情时间(原始字符串,腾讯接口格式 `yyyyMMddHHmmss`,美东时区) */
   time: string;
-  /** UTC unix 毫秒时间戳(自动处理美东夏令时);无法解析时为 `NaN` */
+  /** UTC unix 毫秒时间戳(自动处理美东夏令时);无法解析时为 `null` */
   timestamp: number | null;
   /** 行情时间所属市场时区 (`America/New_York`) */
   tz: MarketTz;
@@ -251,7 +251,7 @@ export interface FundQuote {
   change: number;
   /** 净值日期(原始字符串,如 `'2024-05-12'`,A 股时区) */
   navDate: string;
-  /** 净值日期对应当日 00:00 (`Asia/Shanghai`) 的 UTC 毫秒时间戳;无法解析时为 `NaN` */
+  /** 净值日期对应当日 00:00 (`Asia/Shanghai`) 的 UTC 毫秒时间戳;无法解析时为 `null` */
   timestamp: number | null;
   /** 净值日期所属时区 (`Asia/Shanghai`) */
   tz: MarketTz;

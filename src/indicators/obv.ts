@@ -3,6 +3,7 @@
  * 通过成交量的累积来判断股价走势
  */
 import type { OHLCV } from './types';
+import { SlidingWindowSum } from './ma';
 
 /**
  * OBV 配置选项
@@ -76,19 +77,16 @@ export function calcOBV(data: OHLCV[], options: OBVOptions = {}): OBVResult[] {
     results.push({ obv: obvValue, obvMa: null });
   }
 
-  // 计算 OBV 均线
+  // 计算 OBV 均线 —— F36: 滑窗累计（O(n)）替换逐 bar 重扫整窗（O(n×maPeriod)）。
+  // null 语义不变：窗口内任一 obv 为 null → 该位 obvMa 保持 null
+  // （nonNullCount === maPeriod 才赋值）；本均线与旧实现一样不做舍入。
   if (maPeriod && maPeriod > 0) {
-    for (let i = maPeriod - 1; i < results.length; i++) {
-      let sum = 0;
-      let count = 0;
-      for (let j = i - maPeriod + 1; j <= i; j++) {
-        if (results[j].obv !== null) {
-          sum += results[j].obv!;
-          count++;
-        }
-      }
-      if (count === maPeriod) {
-        results[i].obvMa = sum / maPeriod;
+    const obvSeries: (number | null)[] = results.map((r) => r.obv);
+    const win = new SlidingWindowSum(obvSeries, maPeriod);
+    for (let i = 0; i < results.length; i++) {
+      win.advance(i);
+      if (i >= maPeriod - 1 && win.nonNullCount === maPeriod) {
+        results[i].obvMa = win.value / maPeriod;
       }
     }
   }

@@ -97,6 +97,23 @@ for (const group of docsMeta.summary.methodGroups) {
   }
 }
 
+// R3-13:反向覆盖校验 —— 每个 SDK 方法必须归属于至少一个 methodGroup,
+// 新增方法忘记进组时 check 直接红。确属不进 summary 分组的方法须显式登记
+// 到 docs-meta/sdk.json 的 summary.methodGroupExemptions(当前为空)。
+const groupedMethods = new Set(
+  docsMeta.summary.methodGroups.flatMap((group) => group.methods)
+);
+const methodGroupExemptions = new Set(
+  docsMeta.summary.methodGroupExemptions ?? []
+);
+for (const method of generatedMeta.sdk.methods) {
+  if (!groupedMethods.has(method) && !methodGroupExemptions.has(method)) {
+    errors.push(
+      `SDK method is not listed in any summary.methodGroups (add it to a group or to summary.methodGroupExemptions): ${method}`
+    );
+  }
+}
+
 const expectedSummary = `${renderSummaryMarkdown(docsMeta, generatedMeta)}\n`;
 const actualSummary = await readText('website/summary.md');
 if (actualSummary !== expectedSummary) {

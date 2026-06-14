@@ -183,6 +183,6 @@ describe('createCacheKey', () => {
   });
 
   it('should filter out undefined and null', () => {
-    expect(createCacheKey('a', undefined, 'b', null, 'c')).toBe('a:b:c');
+    expect(createCacheKey('a', undefined, 'b', null, 'c')).toBe('a:\u2205:b:\u2205:c');
   });
 });

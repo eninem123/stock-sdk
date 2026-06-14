@@ -8,6 +8,8 @@ import {
   EM_PUSH_TOKEN,
   toNumberSafe,
   InvalidArgumentError,
+  todayInTz,
+  MARKET_TZ,
 } from '../../core';
 import type {
   ZTPoolType,
@@ -199,17 +201,13 @@ function normalizeDate(date?: string): string | undefined {
  *
  * 不直接用 `new Date()` + `getFullYear()` 是为了避免本地时区与北京时区不一致：
  * 例如美西用户半夜的本地日期可能比北京时区早一天，会拿到无数据。
+ * F43: 收编到 core/time 的 todayInTz（缓存 formatter），不再手写 +8h UTC 算术。
  *
  * 注：服务端对非交易日（周末 / 节假日）会回退到最近一个交易日，
  * 因此这里不需要显式判断是否是交易日。
  */
 function getBeijingDateString(): string {
-  // UTC+8 偏移（北京无 DST）
-  const beijingNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
-  const year = beijingNow.getUTCFullYear();
-  const month = String(beijingNow.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(beijingNow.getUTCDate()).padStart(2, '0');
-  return `${year}${month}${day}`;
+  return todayInTz(MARKET_TZ.CN).replace(/-/g, '');
 }
 
 /**

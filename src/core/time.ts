@@ -8,7 +8,8 @@
  * - 不引入第三方时区库 (SDK 零依赖),通过 `Intl.DateTimeFormat` 计算时区偏移。
  * - 兼容多种本地时间字符串格式 (yyyyMMddHHmmss / YYYY-MM-DD HH:mm:ss / YYYY-MM-DD HH:mm /
  *   YYYY-MM-DD / yyyyMMdd / HH:mm 配 baseDate)。
- * - 解析失败/输入为空时 `timestamp` 为 `NaN`,调用方可用 `Number.isNaN` 检测。
+ * - parseMarketTime 解析失败返回 `NaN`(内部中间值);对外 `TimeMeta.timestamp`
+ *   一律经 toNullableEpoch 归一为 `null`,消费方判 `=== null` 即可。
  */
 
 /**
@@ -116,45 +117,73 @@ function parseWallClock(input: string): ParsedWallClock | null {
  * 缓存 Intl.DateTimeFormat：其构造是 V8 中最昂贵的操作之一(每次重载 ICU 区域数据),
  * 而每个 (locale, tz) 的 options 固定。按行调用的 kline/quote/timeline parser 循环里
  * 复用同一实例,避免逐行重建(3000 bar K 线原本要建 3000 个 formatter)。
- * key 用 locale|tz —— 本模块每个 locale 对应唯一一组 options(en-US 含秒、sv-SE 不含)。
+ *
+ * F38: 本模块只有两组固定 options(en-US 含秒解析用 / sv-SE 不含秒展示用)。
+ * 此前每次取缓存都 `JSON.stringify(options)` 重建 key(5600 行批量解析约 1.3ms
+ * 纯 key 开销),改为 kind 常量表 + 预拼 key 前缀('en-US|' / 'sv-SE|')+ tz 拼接。
+ * 缓存命中行为与 formatter 配置不变。
  */
+type FormatterKind = 'wallParts' | 'svDisplay' | 'dateOnly';
+const FORMATTER_SPECS: Record<
+  FormatterKind,
+  { locale: string; keyPrefix: string; options: Intl.DateTimeFormatOptions }
+> = {
+  // displayedWallUtc 用：formatToParts 拆字段,含秒
+  wallParts: {
+    locale: 'en-US',
+    keyPrefix: 'en-US|',
+    options: {
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    },
+  },
+  // formatInTz 用：sv-SE 天然输出 `YYYY-MM-DD HH:mm`,不含秒
+  svDisplay: {
+    locale: 'sv-SE',
+    keyPrefix: 'sv-SE|',
+    options: {
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    },
+  },
+  // todayInTz 用：en-CA 天然输出 `YYYY-MM-DD`。
+  // F43: 不复用 svDisplay 截前 10 位 —— 不含 hour 字段就彻底避开个别 ICU
+  // 把午夜输出成 "24:00"(归属前一日)时日期部分跟着偏一天的边角。
+  dateOnly: {
+    locale: 'en-CA',
+    keyPrefix: 'en-CA|',
+    options: {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    },
+  },
+};
 const FORMATTER_CACHE = new Map<string, Intl.DateTimeFormat>();
-function getCachedFormatter(
-  locale: string,
-  tz: string,
-  options: Intl.DateTimeFormatOptions
-): Intl.DateTimeFormat {
-  const key = `${locale}|${tz}|${JSON.stringify(options)}`;
+function getCachedFormatter(kind: FormatterKind, tz: string): Intl.DateTimeFormat {
+  const spec = FORMATTER_SPECS[kind];
+  const key = spec.keyPrefix + tz;
   let dtf = FORMATTER_CACHE.get(key);
   if (!dtf) {
-    dtf = new Intl.DateTimeFormat(locale, { timeZone: tz, ...options });
+    dtf = new Intl.DateTimeFormat(spec.locale, { timeZone: tz, ...spec.options });
     FORMATTER_CACHE.set(key, dtf);
   }
   return dtf;
 }
 
-function wallTimeToUTC(wall: ParsedWallClock, tz: string): number {
-  // 第一次:把壁钟时间当作 UTC 得到一个候选时间戳。
-  const utcGuess = Date.UTC(
-    wall.year,
-    wall.month - 1,
-    wall.day,
-    wall.hour,
-    wall.minute,
-    wall.second
-  );
-
-  // 看这个 UTC 时间在目标时区显示的壁钟时间。差值即为时区偏移。
-  const dtf = getCachedFormatter('en-US', tz, {
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-  const parts = dtf.formatToParts(new Date(utcGuess));
+/** 求 UTC 时刻 `tsUtc` 在目标时区显示的壁钟时间（编码为 UTC ms，便于做差求偏移） */
+function displayedWallUtc(tsUtc: number, tz: string): number {
+  const dtf = getCachedFormatter('wallParts', tz);
+  const parts = dtf.formatToParts(new Date(tsUtc));
   const partMap: Record<string, string> = {};
   for (const p of parts) {
     if (p.type !== 'literal') partMap[p.type] = p.value;
@@ -163,7 +192,7 @@ function wallTimeToUTC(wall: ParsedWallClock, tz: string): number {
   let displayedHour = parseInt(partMap.hour ?? '0', 10);
   if (displayedHour === 24) displayedHour = 0;
 
-  const displayedUtc = Date.UTC(
+  return Date.UTC(
     parseInt(partMap.year ?? '0', 10),
     parseInt(partMap.month ?? '1', 10) - 1,
     parseInt(partMap.day ?? '1', 10),
@@ -171,11 +200,94 @@ function wallTimeToUTC(wall: ParsedWallClock, tz: string): number {
     parseInt(partMap.minute ?? '0', 10),
     parseInt(partMap.second ?? '0', 10)
   );
+}
 
-  // utcGuess - displayedUtc = 该时区相对 UTC 的偏移。
-  // 真实 UTC = utcGuess + offset
-  const offset = utcGuess - displayedUtc;
-  return utcGuess + offset;
+/**
+ * (tz, 年) 固定偏移缓存(Review P3-12)。
+ * DST two-pass 修复让每次换算做两次 Intl.formatToParts(采样+验证),
+ * 而 Asia/Shanghai / Asia/Hong_Kong 是固定时差时区,验证永远命中纯属白付
+ * (实测 5800 行批量解析 Intl 开销 14.2ms→28.4ms 翻倍)。
+ * 每 (tz, 年) 首次使用时逐月采样:全年偏移一致 → 缓存该偏移,
+ * 后续同年行【零 Intl 调用】直接做差(比修复前的单遍还快);
+ * 不一致(DST 年,如 America/New_York、Asia/Shanghai 1986-1991)→ 缓存 null,
+ * 逐行走 two-pass。
+ */
+const FIXED_OFFSET_CACHE = new Map<string, number | null>();
+
+function offsetAt(tsUtc: number, tz: string): number {
+  return displayedWallUtc(tsUtc, tz) - tsUtc;
+}
+
+function fixedOffsetForYear(tz: string, year: number): number | null {
+  const key = `${tz}|${year}`;
+  let cached = FIXED_OFFSET_CACHE.get(key);
+  if (cached === undefined) {
+    // R3-3:逐月采样(每月 1 日 12:00 UTC,12 次 formatToParts,每 (tz,年) 一次性
+    // 成本可忽略)。此前 1/4/7/10 月四点采样有盲区:香港 1974(夏令时
+    // 1973-12-30 → 1974-10-20)四个采样点全 +9 → 全年被误缓存为固定 +9,
+    // 10-20 之后的两个多月快路径整体偏 1 小时;任何落在 10-01 之后的年内转换通杀。
+    // 逐月采样下,月中转换必使该月 1 日与下月 1 日偏移不等 → 正确判非固定。
+    // 如实记录的残余盲区(不在支持时区 CN/HK/NY 的现实历史中,出现需扩 tz 时再议):
+    // - 同一个月内「转换 + 回切」的奇异规则(相邻月 1 日仍相等);
+    // - 12 月 3 日~29 日之间的单次转换(12-01 之后再无采样点;12-30/31 与
+    //   1-01/02 已由 wallTimeToUTC 的跨年边界守卫兜走 two-pass)。
+    let fixed: number | null = offsetAt(Date.UTC(year, 0, 1, 12), tz);
+    for (let month = 1; month < 12; month++) {
+      if (offsetAt(Date.UTC(year, month, 1, 12), tz) !== fixed) {
+        fixed = null;
+        break;
+      }
+    }
+    cached = fixed;
+    FIXED_OFFSET_CACHE.set(key, cached);
+  }
+  return cached;
+}
+
+function wallTimeToUTC(wall: ParsedWallClock, tz: string): number {
+  // 快路径:全年固定偏移的 (tz, 年) 直接做差。
+  // 跨年边界(1 月 1-2 日 / 12 月 30-31 日)的真实 instant 可能落在相邻年,
+  // 偏移应取相邻年的 —— 这几天保守走 two-pass(每年仅 4 天,代价可忽略)。
+  const nearYearBoundary =
+    (wall.month === 1 && wall.day <= 2) || (wall.month === 12 && wall.day >= 30);
+  if (!nearYearBoundary) {
+    const fixed = fixedOffsetForYear(tz, wall.year);
+    if (fixed !== null) {
+      return (
+        Date.UTC(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute, wall.second) -
+        fixed
+      );
+    }
+  }
+
+  // 目标:找到 UTC 时刻 T,使其在 tz 显示的壁钟 == wall。
+  // 记 displayed(T) 为 T 在 tz 的壁钟(UTC ms 编码),偏移 off(T) = displayed(T) - T,
+  // 则解满足 T = target - off(T),用定点迭代求解。
+  const target = Date.UTC(
+    wall.year,
+    wall.month - 1,
+    wall.day,
+    wall.hour,
+    wall.minute,
+    wall.second
+  );
+
+  // 第一遍:在 target 时刻采样偏移。target 与真实 T 落在 DST 切换同侧时一次即中。
+  const first = 2 * target - displayedWallUtc(target, tz);
+  if (displayedWallUtc(first, tz) === target) {
+    return first;
+  }
+
+  // 第二遍:首遍偏移取错了切换侧(美东春令日 03:00–07:00 / 冬令日 01:00–06:00 的
+  // 壁钟窗口,单遍会整体偏 1 小时),在 first 时刻重新采样偏移再算一次。
+  const second = target - displayedWallUtc(first, tz) + first;
+  if (displayedWallUtc(second, tz) === target) {
+    return second;
+  }
+
+  // 两遍都不命中:wall 是春令跳变中不存在的壁钟时间(如美东 02:30),
+  // 取首遍结果 —— 按「顺延到跳变后」语义返回(02:30 缺失 → 等同 03:30 EDT 时刻)。
+  return first;
 }
 
 /**
@@ -228,18 +340,33 @@ export function parseMarketTime(local: string, tz: MarketTz): number {
 }
 
 /**
- * 构造 `TimeMeta`。原始字符串无法解析时 `timestamp` 为 `NaN`。
+ * 把 parseMarketTime 的 `NaN` 结果归一化为 `null`（v2：对外契约禁止 NaN）。
+ * 所有直接调用 parseMarketTime 落 `timestamp` 字段的 parser 必须经由本函数
+ * （或 buildTimeMeta*），否则 NaN 会流进类型标注为 `number | null` 的字段。
+ */
+export function toNullableEpoch(ts: number): number | null {
+  return Number.isNaN(ts) ? null : ts;
+}
+
+/**
+ * 构造 `TimeMeta`。原始字符串无法解析时 `timestamp` 为 `null`。
  *
  * @param local 市场本地时间字符串
  * @param tz    市场时区
  */
-/** 把 parseMarketTime 的 `NaN` 结果归一化为 `null`（v2：禁止手写 NaN） */
-function toNullableEpoch(ts: number): number | null {
-  return Number.isNaN(ts) ? null : ts;
-}
-
 export function buildTimeMeta(local: string, tz: MarketTz): TimeMeta {
   return { timestamp: toNullableEpoch(parseMarketTime(local, tz)), tz };
+}
+
+/**
+ * 'YYYY-MM-DD' 加 n 个自然日（UTC 日历加法，正确处理跨月/跨年进位，
+ * 不受运行环境本地时区/DST 影响）。
+ * 全库唯一一份日历日加法（P3-13 收编:此前 indicatorService 与
+ * eastmoney/utils 各持一份同义实现）。
+ */
+export function addDays(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
 /**
@@ -278,18 +405,31 @@ export function formatInTz(epoch: number | null, tz: MarketTz): string {
   // 用 sv-SE locale 直接 format —— sv-SE 天然以 `YYYY-MM-DD HH:mm:ss` 形式输出，
   // 比 formatToParts + 手动拼接更稳健（避免某些 Node ICU 实现里 minute 字段
   // 携带额外冒号后缀的怪异行为）。
-  const formatted = getCachedFormatter('sv-SE', tz, {
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(epoch));
+  const formatted = getCachedFormatter('svDisplay', tz).format(new Date(epoch));
   // sv-SE 输出可能是 "2024-05-12 09:30" 或 "2024-05-12 09:30:00"，截到分钟即可。
   // 同时把可能出现的 "24:" 归一化为 "00:"
   const match = formatted.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})/);
   if (!match) return formatted;
   const hour = match[2] === '24' ? '00' : match[2];
   return `${match[1]} ${hour}:${match[3]}`;
+}
+
+/**
+ * 取某一 UTC 时刻在指定市场时区下的"当日日期"字符串（`YYYY-MM-DD`）。
+ *
+ * F43: 收编此前散落各处的"北京时间今天"手写实现 —— 手动 `+8h` UTC 算术
+ * (topicData)、本地时区 `getFullYear()`(fund,跨年 ±1 真 bug)、每次调用
+ * 重建 `Intl.DateTimeFormat`(tradingCalendarService) —— 统一走本模块的
+ * FORMATTER_CACHE,夏令时(美东)由 Intl 正确处理。
+ *
+ * @param tz    市场时区(使用 `MARKET_TZ`)
+ * @param epoch UTC unix 毫秒时间戳,默认取 `Date.now()`(当前时刻)
+ *
+ * @example
+ * todayInTz(MARKET_TZ.CN);                       // 北京时间今天,如 '2026-06-11'
+ * todayInTz(MARKET_TZ.US, 1764547200000);        // 指定时刻的美东日期
+ * todayInTz(MARKET_TZ.CN).replace(/-/g, '');     // 需要 'YYYYMMDD' 时由调用方去横线
+ */
+export function todayInTz(tz: MarketTz, epoch: number = Date.now()): string {
+  return getCachedFormatter('dateOnly', tz).format(new Date(epoch));
 }

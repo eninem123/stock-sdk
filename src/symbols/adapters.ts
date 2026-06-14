@@ -8,8 +8,12 @@
 import type { NormalizedSymbol } from './types';
 import { InvalidArgumentError } from '../core/errors';
 
-/** 交易所 → 东财 secid 数字市场前缀（仅股票类） */
-const EXCHANGE_TO_SECID_PREFIX: Record<string, string> = {
+/**
+ * 交易所 → 东财 secid 数字市场前缀（仅股票类）。
+ * F41: 导出供 providers 复用（tencent/batch 的美股代码列表按前缀过滤），
+ * 不再在各处重复声明 NASDAQ/NYSE/AMEX → 105/106/107 映射。
+ */
+export const EXCHANGE_TO_SECID_PREFIX: Record<string, string> = {
   SSE: '1',
   SZSE: '0',
   BSE: '0',

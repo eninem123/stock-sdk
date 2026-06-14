@@ -10,6 +10,8 @@ import { fetchJsVars } from '../../core/jsVars';
 import { extractJsonFromJsonp } from '../../core/jsonp';
 import { SdkError } from '../../core/errors';
 import { withScriptMutex } from '../../core/scriptMutex';
+import { toFiniteNumberOrNull } from '../../core/parser';
+import { todayInTz, MARKET_TZ } from '../../core/time';
 import type { RequestClient } from '../../core/request';
 import type {
   FundDividend,
@@ -48,9 +50,9 @@ interface FundDividendRaw {
 }
 
 function currentYearShanghai(): number {
-  // 简化实现：用本地时间取年份。A 股时区 UTC+8，跨年瞬间在 UTC-8~+8 时区
-  // 之间可能出现 ±1 天误差，但对"年"维度足够（用户也可显式传 year 覆盖）。
-  return new Date().getFullYear();
+  // F43: 按北京时间(Asia/Shanghai)取年份。此前用本地时区 getFullYear(),
+  // 跨年瞬间在非 UTC+8 时区会差 ±1 年(如美西 12-31 晚已是北京 1-1)。
+  return Number(todayInTz(MARKET_TZ.CN).slice(0, 4));
 }
 
 function buildUrl(opts: FundDividendListOptions, page: number): string {
@@ -72,11 +74,9 @@ function parseDate(s: string | undefined): string | null {
   return m ? m[1] : null;
 }
 
-function parseNumber(s: string | undefined): number | null {
-  if (s === undefined || s === '') return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
-}
+// F44: 本文件原有 parseNumber / toNullableNumber / toDailyReturn / toNullableInt
+// 四个语义完全一致的局部数字解析器(undefined/''/'--' → null,Number 严格解析,
+// 拒绝 Infinity),统一收编为 core/parser 的 toFiniteNumberOrNull。
 
 function mapRow(row: string[]): FundDividend {
   return {
@@ -84,8 +84,11 @@ function mapRow(row: string[]): FundDividend {
     name: row[1] ?? '',
     equityRecordDate: parseDate(row[2]),
     exDividendDate: parseDate(row[3]),
-    dividendPerShare: parseNumber(row[4]),
-    payDate: parseDate(row[5]),  };
+    dividendPerShare: toFiniteNumberOrNull(row[4]),
+    payDate: parseDate(row[5]),
+    // v1 时代该列只能通过 raw[6] 获取;v2 删除 raw 后必须显式映射,否则数据不可达
+    dividendType: row[6]?.trim() ? row[6].trim() : null,
+  };
 }
 
 /** 拉取单页（不做客户端过滤、不做翻页聚合） */
@@ -120,11 +123,11 @@ async function fetchOnePage(
  *
  * @example
  * // 拉 2024 年第 1 页（默认按除息日倒序）
- * await sdk.getFundDividendList({ year: 2024 });
+ * await sdk.fund.dividendList({ year: 2024 });
  *
  * @example
  * // 拉 2024 年 110011 的全部分红
- * await sdk.getFundDividendList({ year: 2024, page: 'all', code: '110011' });
+ * await sdk.fund.dividendList({ year: 2024, page: 'all', code: '110011' });
  */
 export async function getFundDividendList(
   client: RequestClient,
@@ -177,12 +180,6 @@ interface FundNavRaw {
   Data_ACWorthTrend?: Array<[number, number]>;
 }
 
-function toDailyReturn(v: number | string | undefined): number | null {
-  if (v === undefined || v === '' || v === null) return null;
-  const n = typeof v === 'number' ? v : Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
 function timestampToDate(ts: number): string {
   // pingzhongdata 的 x 是 UTC 当日 00:00 的毫秒数（每条对应 A 股一个交易日）
   // 直接用 ISO 字符串切前 10 位即可得到 YYYY-MM-DD
@@ -200,7 +197,7 @@ function timestampToDate(ts: number): string {
  * @param code 基金代码（纯数字，如 `'110011'`）
  *
  * @example
- * const h = await sdk.getFundNavHistory('110011');
+ * const h = await sdk.fund.navHistory('110011');
  * console.log(h.name, h.items.length, h.items[h.items.length - 1]);
  */
 export async function getFundNavHistory(
@@ -228,7 +225,7 @@ export async function getFundNavHistory(
     timestamp: p.x,
     nav: p.y,
     accNav: accMap.has(p.x) ? (accMap.get(p.x) as number) : null,
-    dailyReturn: toDailyReturn(p.equityReturn),
+    dailyReturn: toFiniteNumberOrNull(p.equityReturn),
     unitMoney: p.unitMoney ?? '',
   }));
 
@@ -365,12 +362,6 @@ async function nodeFetchFundGz(
   }
 }
 
-function toNullableNumber(s: string | undefined): number | null {
-  if (s === undefined || s === '' || s === '--') return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
-}
-
 /**
  * 获取基金当日实时估值（来自天天基金 fundgz 接口）。
  *
@@ -391,9 +382,9 @@ export async function getFundEstimate(
     code: raw.fundcode ?? code,
     name: raw.name ?? null,
     navDate: raw.jzrq?.trim() ? raw.jzrq.trim() : null,
-    nav: toNullableNumber(raw.dwjz),
-    estimatedNav: toNullableNumber(raw.gsz),
-    estimatedChangePercent: toNullableNumber(raw.gszzl),
+    nav: toFiniteNumberOrNull(raw.dwjz),
+    estimatedNav: toFiniteNumberOrNull(raw.gsz),
+    estimatedChangePercent: toFiniteNumberOrNull(raw.gszzl),
     estimateTime: raw.gztime?.trim() ? raw.gztime.trim() : null,
   };
 }
@@ -413,12 +404,6 @@ interface FundRankRaw {
   }>;
   /** `[[ms, 百分位], ...]` */
   Data_rateInSimilarPersent?: Array<[number, number]>;
-}
-
-function toNullableInt(v: number | string | undefined): number | null {
-  if (v === undefined || v === '' || v === null) return null;
-  const n = typeof v === 'number' ? v : Number(v);
-  return Number.isFinite(n) ? n : null;
 }
 
 /**
@@ -457,8 +442,8 @@ export async function getFundRankHistory(
   const items: FundRankPoint[] = series.map((p) => ({
     date: timestampToDate(p.x),
     timestamp: p.x,
-    rank: toNullableInt(p.y),
-    total: toNullableInt(p.sc),
+    rank: toFiniteNumberOrNull(p.y),
+    total: toFiniteNumberOrNull(p.sc),
     percentile: percentMap.has(p.x) ? (percentMap.get(p.x) as number) : null,
   }));
 

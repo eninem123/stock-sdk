@@ -62,6 +62,7 @@ describe('getFundDividendList', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.useRealTimers();
     lastUrl = undefined;
   });
 
@@ -158,6 +159,39 @@ describe('getFundDividendList', () => {
     expect(r.items).toEqual([]);
     expect(r.totalPages).toBe(0);
     expect(r.pageSize).toBe(0);
+  });
+
+  it('F43: 默认 year 按北京时间取年,本地时区跨年不漂移(修 ±1 bug)', async () => {
+    // UTC 2025-12-31 20:00 = 北京 2026-01-01 04:00 —— 北京已跨年。
+    // 修复前用本地时区 getFullYear():凡本地时区落后于 UTC+8 且本地尚未跨年
+    // (如 UTC/美西机器),默认 year 会取 2025;修复后恒按北京年取 2026。
+    // 只 fake Date、保留真实 timer,避免干扰 RequestClient 内部异步。
+    vi.useFakeTimers({ now: Date.UTC(2025, 11, 31, 20, 0), toFake: ['Date'] });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        lastUrl = String(input);
+        return new Response(EMPTY_PAGE, { status: 200 });
+      })
+    );
+
+    await getFundDividendList(client, {}); // 不传 year
+
+    expect(lastUrl).toContain('year=2026');
+  });
+
+  it('F44: 分红金额是严格数字解析(带尾缀的串 → null,不取前缀)', async () => {
+    // toFiniteNumberOrNull 保持原局部 parseNumber 的 Number 严格语义:
+    // '0.05元' 不能被 parseFloat 式地解析成 0.05
+    const payload =
+      'var pageinfo = [1, 1, 1]; ' +
+      'var jjfh_data = [["999999","测试基金","2024-12-31","2024-12-31","0.05元","2025-01-03","1"]];';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(payload, { status: 200 }))
+    );
+    const r = await getFundDividendList(client, { year: 2024 });
+    expect(r.items[0].dividendPerShare).toBeNull();
   });
 
   it('coerces missing / empty numeric and date fields to null', async () => {
