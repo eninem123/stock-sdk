@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://stock-sdk.linkdiary.cn/sitemap.xml

@@ -3,9 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   contractYYMM,
   monthISO,
-} from '../../../site-v2/.vitepress/theme/components/playground/utils';
+} from '../../../website/.vitepress/theme/components/playground/utils';
 
-describe('site-v2 playground date utils', () => {
+describe('website playground date utils', () => {
   afterEach(() => {
     vi.useRealTimers();
   });

@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, master]
     paths:
-      - 'site-v2/**'
+      - 'website/**'
       - 'src/**'
       - 'scripts/**'
       - 'docs-meta/**'
@@ -49,14 +49,14 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Build with VitePress
-        run: yarn build:v2:pages
+        run: yarn build:pages
         env:
           GRAFANA_SOURCEMAP_TOKEN: ${{ secrets.GRAFANA_SOURCEMAP_TOKEN }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site-v2/.vitepress/dist
+          path: website/.vitepress/dist
 
   deploy:
     environment:

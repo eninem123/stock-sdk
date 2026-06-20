@@ -2,7 +2,7 @@ import { getWebInstrumentations, initializeFaro } from '@grafana/faro-web-sdk'
 import { TracingInstrumentation } from '@grafana/faro-web-tracing'
 
 /**
- * 初始化 Grafana Faro 监控
+ * 初始化 Grafana Faro 监控（v2 文档站，独立 collect 通道）
  * 仅在生产环境的浏览器中执行
  */
 export function initFaro(): void {
@@ -16,9 +16,9 @@ export function initFaro(): void {
   }
 
   initializeFaro({
-    url: 'https://faro-collector-prod-ap-southeast-1.grafana.net/collect/082decbf2646ea846e92dec8654b44ac',
+    url: 'https://faro-collector-prod-ap-southeast-1.grafana.net/collect/f0d3ef06cdba88b8e125fd0953b72157',
     app: {
-      name: 'stock-sdk-docs',
+      name: 'stock-sdk-docs-v2',
       version: '1.0.0',
       environment: 'production',
     },

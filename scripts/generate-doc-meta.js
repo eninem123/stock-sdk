@@ -6,7 +6,7 @@ import { gzipSync } from 'node:zlib';
 const currentFilePath = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFilePath);
 const rootDir = path.resolve(currentDir, '..');
-const docsDir = process.env.DOCS_DIR || 'site-v2';
+const docsDir = process.env.DOCS_DIR || 'website';
 
 async function readJson(relativePath) {
   const absolutePath = path.join(rootDir, relativePath);
