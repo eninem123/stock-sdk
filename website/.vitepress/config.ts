@@ -262,7 +262,7 @@ export default defineConfig({
     // v2 主色：深红（红 = 涨 = 吉利；浅色模式 #b91c1c，深色模式亮红 #f87171）
     ['meta', { name: 'theme-color', content: '#b91c1c' }],
     ['meta', { property: 'og:type', content: 'website' }],
-    ['meta', { property: 'og:site_name', content: 'Stock SDK v2' }],
+    ['meta', { property: 'og:site_name', content: 'Stock SDK' }],
   ],
 
   locales: {
