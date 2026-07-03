@@ -7,6 +7,7 @@ import {
   toTencentSymbol,
   toEastmoneySecid,
 } from '../../../src/symbols';
+import { InvalidArgumentError } from '../../../src/core';
 
 describe('toTencentSymbol', () => {
   it.each([
@@ -18,6 +19,16 @@ describe('toTencentSymbol', () => {
   ])('%s → %s', (input, expected) => {
     expect(toTencentSymbol(normalizeSymbol(input))).toBe(expected);
   });
+
+  // 特殊指数腾讯无对应标的:fail-fast 而非拼出 shH30533 / hkHSHCI 垃圾查询
+  it.each(['H30533', '930955', 'HSHCI', 'GDAXI'])(
+    '特殊指数 %s → InvalidArgumentError',
+    (input) => {
+      expect(() => toTencentSymbol(normalizeSymbol(input))).toThrow(
+        InvalidArgumentError
+      );
+    }
+  );
 });
 
 describe('toEastmoneySecid', () => {
@@ -31,12 +42,36 @@ describe('toEastmoneySecid', () => {
     ['106.BABA', '106.BABA'],
     ['930955', '2.930955'],
     ['932000', '2.932000'],
+    ['931071', '2.931071'], // 93xxxx 按码形匹配,不限于枚举过的样本
     ['H30533', '2.H30533'],
     ['H11136', '2.H11136'],
+    ['h30533', '2.H30533'], // 大小写不敏感,产出规范大写形
     ['HSHCI', '124.HSHCI'],
     ['GDAXI', '100.GDAXI'],
+    ['1.930955', '1.930955'], // 显式 secid 前缀断言不被注册表覆盖
+    ['105.GDAXI', '105.GDAXI'],
+    ['900901', '1.900901'], // 沪 B(9 开头非 93 段)不受 carve-out 影响
   ])('%s → %s', (input, expected) => {
     expect(toEastmoneySecid(normalizeSymbol(input))).toBe(expected);
+  });
+
+  it("assetType:'index' 消歧 hint 不覆盖显式 secid 前缀断言(exchange 一致性门)", () => {
+    expect(
+      toEastmoneySecid(normalizeSymbol('105.GDAXI', { assetType: 'index' }))
+    ).toBe('105.GDAXI');
+    expect(
+      toEastmoneySecid(normalizeSymbol('1.930955', { assetType: 'index' }))
+    ).toBe('1.930955');
+  });
+
+  // 现状记录(非契约背书):注册表未命中的普通指数走交易所前缀 fall-through。
+  // 沪市宿主的 000xxx 指数在该路径下已知错宿主(东财实为 '1.000300',见
+  // fundFlow getMarketFundFlow 的 1.000001),待 index 感知的交易所推断修复后
+  // 本断言应更新为 '1.000300'。
+  it("普通指数 fall-through 现状:'000300'+{assetType:'index'} → '0.000300'(已知错宿主,待修)", () => {
+    expect(toEastmoneySecid(normalizeSymbol('000300', { assetType: 'index' }))).toBe(
+      '0.000300'
+    );
   });
 });
 
@@ -44,6 +79,13 @@ describe('round-trip 稳定性', () => {
   it('腾讯前缀 → normalize → toTencentSymbol 还原', () => {
     for (const s of ['sh600519', 'sz000001', 'hk00700', 'usAAPL']) {
       expect(toTencentSymbol(normalizeSymbol(s))).toBe(s);
+    }
+  });
+
+  it('特殊指数 secid:产出必可回读(emit → normalize → emit 不动点)', () => {
+    for (const bare of ['930955', '932000', '931071', 'H30533', 'HSHCI', 'GDAXI']) {
+      const secid = toEastmoneySecid(normalizeSymbol(bare));
+      expect(toEastmoneySecid(normalizeSymbol(secid))).toBe(secid);
     }
   });
 });

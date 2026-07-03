@@ -73,6 +73,15 @@ export class IndicatorService {
     // F42: 市场解析收编到 symbols/marketOf(与 CLI detectMarketTag 共享实现);
     // 解析失败(undefined)兜底 'A' 的决策保留在本调用方。
     const market = marketOf(symbol);
+    // GLOBAL(GDAXI 等海外特殊指数)暂无 K 线路由:落进 'A' 会在 provider 内部
+    // 因 {market:'CN'} hint 冲突抛出提及调用方未传过的 hint 的误导性错误,
+    // 这里直接给出可行动的信息
+    if (market === 'GLOBAL') {
+      throw new InvalidArgumentError(
+        `No kline route for GLOBAL-market symbol '${symbol}'; ` +
+          `use the US kline API with a raw secid instead (e.g. kline.us('100.GDAXI'))`
+      );
+    }
     return market === 'HK' ? 'HK' : market === 'US' ? 'US' : 'A';
   }
 

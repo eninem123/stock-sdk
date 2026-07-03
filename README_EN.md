@@ -58,7 +58,7 @@ If you're a frontend engineer, you may have encountered these problems:
 
 - ✅ **Zero dependencies**, runs in both the browser and Node.js 18+; ships both **ESM** and **CommonJS**
 - ✅ **Namespaced API**: `sdk.quotes.cn()` / `sdk.kline.cn()` / `sdk.options.etf.dailyKline()`, grouped by domain, great IDE autocomplete
-- ✅ **Unified symbol model**: `string` as a first-class input — `sh600519` / `600519` / `600519.SH` / `00700` / `hk00700` / `AAPL` / `105.AAPL` are all parsed tolerantly
+- ✅ **Unified symbol model**: `string` as a first-class input — `sh600519` / `600519` / `600519.SH` / `00700` / `hk00700` / `AAPL` / `105.AAPL` are all parsed tolerantly; special indices supported (`930955` / `H30533` / `HSHCI` / `GDAXI`, [see the symbols guide](https://stock-sdk.linkdiary.cn/en/guide/symbols.html))
 - ✅ **A-shares / HK / US / mutual funds**: real-time quotes, daily/weekly/monthly K-lines, minute K-lines (1/5/15/30/60), intraday time-series
 - ✅ **Technical indicators**: MA / MACD / BOLL / KDJ / RSI / WR / BIAS / CCI / ATR / OBV / ROC / DMI / SAR / KC
 - ✅ **Signals / screener / backtest**: `calcSignals` (golden/death cross, overbought/oversold, etc.), a chainable screener, local backtesting

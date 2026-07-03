@@ -7,6 +7,7 @@
  */
 import type { NormalizedSymbol } from './types';
 import { InvalidArgumentError } from '../core/errors';
+import { lookupSpecialIndex } from './specialIndex';
 
 /**
  * 交易所 → 东财 secid 数字市场前缀（仅股票类）。
@@ -22,15 +23,6 @@ export const EXCHANGE_TO_SECID_PREFIX: Record<string, string> = {
   NYSE: '106',
   AMEX: '107',
   US: '105',
-};
-
-const SPECIAL_CODE_TO_SECID: Record<string, string> = {
-  H30533: '2.H30533',
-  H11136: '2.H11136',
-  HSHCI: '124.HSHCI',
-  GDAXI: '100.GDAXI',
-  '932000': '2.932000',
-  '930955': '2.930955',
 };
 
 /** 交易所 → 腾讯前缀（A 股） */
@@ -66,6 +58,14 @@ export function toTencentSymbol(ns: NormalizedSymbol): string {
       return `${prefix}${ns.code}`;
     }
     case 'HK':
+      // 腾讯港股码恒为数字(补零到 5 位);HSHCI 等字母指数码腾讯无对应标的,
+      // 拼 'hkHSHCI' 是必然空结果的垃圾查询 → fail-fast
+      if (!/^\d+$/.test(ns.code)) {
+        throw new InvalidArgumentError(
+          `Cannot map to Tencent symbol: HK code '${ns.code}' is not numeric`,
+          { market: ns.market, code: ns.code }
+        );
+      }
       return `hk${ns.code.padStart(5, '0')}`;
     case 'US':
       return `us${ns.code}`;
@@ -91,12 +91,23 @@ export function toEastmoneySecid(ns: NormalizedSymbol): string {
       { assetType: ns.assetType, exchange: ns.exchange, code: ns.code }
     );
   }
+  // 特殊指数按分类驱动:assetType==='index' 且 exchange 与注册表一致才走注册表
+  // 路由 —— exchange 一致性保证只有 normalize 按注册表分类出的符号(CSI/HSI/DAX)
+  // 命中;'105.GDAXI'/'1.930955' 即使带 assetType:'index' 消歧 hint,其 NASDAQ/SSE
+  // 分类也不满足一致性,显式 secid 前缀断言保持原语义,真实同名 ticker 不会被劫持。
+  // 须先于 HK 早返回:HSHCI 分类为 HK/HSI,走 '124.' 而非港股通用 '116.'。
+  // 注册表未命中的普通指数('000300'+{assetType:'index'})维持现状走交易所前缀
+  // —— 注意对沪市宿主的 000xxx 指数该 fall-through 已知错宿主(东财实为 '1.',
+  // 见 fundFlow getMarketFundFlow 的 1.000001),待 index 感知的交易所推断修复;
+  // CSI/HSI/DAX 等特殊 exchange 若未命中注册表,由下方 prefix 缺失 fail-fast。
+  if (ns.assetType === 'index') {
+    const specialIdx = lookupSpecialIndex(ns.code);
+    if (specialIdx && specialIdx.exchange === ns.exchange) {
+      return `${specialIdx.secidPrefix}.${specialIdx.code}`;
+    }
+  }
   if (ns.market === 'HK') {
     return `116.${ns.code.padStart(5, '0')}`;
-  }
-  const specialSecid = SPECIAL_CODE_TO_SECID[ns.code.toUpperCase()];
-  if (specialSecid) {
-    return specialSecid;
   }
   const prefix = EXCHANGE_TO_SECID_PREFIX[ns.exchange];
   if (!prefix) {

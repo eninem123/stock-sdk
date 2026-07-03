@@ -22,6 +22,7 @@ export type AssetType =
 /**
  * 交易所 / 市场强判别字段。
  * 股票：SSE/SZSE/BSE/HKEX/NASDAQ/NYSE/AMEX；
+ * 指数机构（特殊指数）：CSI（中证指数）/HSI（恒生指数）/DAX（德国 DAX）；
  * 国内期货：SHFE/DCE/CZCE/INE/CFFEX/GFEX；海外期货：COMEX/NYMEX/CBOT/LME。
  * 允许 string 兜底以容纳未来扩展。
  */
@@ -34,6 +35,9 @@ export type Exchange =
   | 'NYSE'
   | 'AMEX'
   | 'US'
+  | 'CSI'
+  | 'HSI'
+  | 'DAX'
   | 'SHFE'
   | 'DCE'
   | 'CZCE'

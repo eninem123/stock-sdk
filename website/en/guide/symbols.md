@@ -75,10 +75,11 @@ interface NormalizedSymbol {
 |---|---|---|
 | 1 | Dotted form: Eastmoney secid / suffix / futures exchange / board | `1.600519`, `600519.SH`, `CFFEX.IF2412`, `90.BK0475` |
 | 2 | Letter prefix | `sh600519`, `sz000001`, `bj430047`, `hk00700`, `usAAPL` |
-| 3 | Pure digits | `600519`, `000001`, `00700` |
-| 4 | Bare futures contract with hint | `rb2510` (with `assetType:'futures'`) |
-| 5 | Pure letters → US stock | `AAPL`, `MSFT` |
-| 6 | Parse failure → `throw InvalidSymbolError` | `''`, `@@@` |
+| 3 | Special indices (by code shape / named, see below) | `930955`, `H30533`, `HSHCI`, `GDAXI` |
+| 4 | Pure digits | `600519`, `000001`, `00700` |
+| 5 | Bare futures contract with hint | `rb2510` (with `assetType:'futures'`) |
+| 6 | Pure letters → US stock | `AAPL`, `MSFT` |
+| 7 | Parse failure → `throw InvalidSymbolError` | `''`, `@@@` |
 
 ### Per-market cheat sheet
 
@@ -91,9 +92,39 @@ interface NormalizedSymbol {
 | US | `AAPL`, `usAAPL`, `105.AAPL`, `106.BABA` | `US` / `US` (or NASDAQ / NYSE / AMEX) |
 | CN futures | `rb2510` (with hint), `CFFEX.IF2412` | `CN` / `SHFE`, `CFFEX` … |
 | Board | `90.BK0475` | `CN` / `SSE` / `board` |
+| Special index | `930955`, `H30533`, `2.930955`, `HSHCI`, `GDAXI` | `CN`/`CSI`, `HK`/`HSI`, `GLOBAL`/`DAX`, assetType always `index` |
 
 > Hong Kong codes shorter than 5 digits are zero-padded: `700` → `00700`, `hk700` → `00700`.
 > US tickers are upper-cased: `aapl` → `AAPL`.
+
+### Special indices (CSI / Hang Seng / overseas)
+
+Some indices use dedicated Eastmoney secid market prefixes (`2` / `124` / `100`) instead of exchange-based inference. The SDK recognizes them via **code-shape rules plus a named registry**, and `assetType` is always `'index'`:
+
+| Family | Code shape / codes | Normalized result | Eastmoney secid |
+|---|---|---|---|
+| CSI indices (open family) | `93xxxx` (e.g. `930955`, `932000`, `931071`), `H` + 5 digits (e.g. `H30533`, `H11136`) | `CN` / `CSI` | `2.<code>` |
+| Hang Seng Healthcare Index | `HSHCI` | `HK` / `HSI` | `124.HSHCI` |
+| German DAX index | `GDAXI` | `GLOBAL` / `DAX` | `100.GDAXI` |
+
+```ts
+// CSI indices go through the CN pipeline (kline.cn / getHistoryKline just work)
+await sdk.kline.cn('930955', { startDate: '20240101', endDate: '20240105' });
+await sdk.kline.cn('H30533');
+
+// HSHCI belongs to the HK market, use the HK pipeline
+await sdk.kline.hk('HSHCI');
+
+// The secid forms (2.930955 / 2.H30533 / 124.HSHCI / 100.GDAXI) are valid inputs too
+normalizeSymbol('2.930955'); // → CN / CSI / index / 930955
+```
+
+Notes:
+
+- The code shape syntactically determines all three axes (`market` / `exchange` / `assetType`); conflicting hints throw `InvalidSymbolError` (e.g. `kline.cn('HSHCI')` — HSHCI belongs to the HK market, use `kline.hk` instead).
+- Special indices have no Tencent quote mapping — `toTencentSymbol` throws `InvalidArgumentError`; individual fund flow (`fundFlow.individual`) does not support special indices either.
+- The CSI family matches by code shape (an open set): a well-formed but nonexistent code (e.g. mistyping `H30533` as `H30553`) parses successfully and surfaces as empty upstream data rather than a local parse error — consistent with every other code family (e.g. `600520`).
+- `GDAXI` belongs to the `GLOBAL` market and has no formal kline entry point yet; as an escape hatch you can pass the raw secid via `sdk.kline.us('100.GDAXI')` (the response is labeled with the US model — `currency: 'USD'` and US/Eastern timezone — which is not accurate for DAX).
 
 ## Pure-code inference and ambiguity
 
@@ -101,7 +132,7 @@ When you supply only a pure code (no prefix, no suffix, no hint), inference foll
 
 | Shape | Default inference | Exchange refinement |
 |---|---|---|
-| 6 pure digits | A-share stock | starts with `6/5/9` → SSE; `0/3` → SZSE; `4/8` or the `92` range → BSE |
+| 6 pure digits | A-share stock | starts with `6/5/9` → SSE; `0/3` → SZSE; `4/8` or the `92` range → BSE; the `93` range → CSI index (see “Special indices” above) |
 | 5 / 4 pure digits | Hong Kong stock | zero-padded to 5 digits |
 | Pure letters | US stock | — |
 
