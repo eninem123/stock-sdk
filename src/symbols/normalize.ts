@@ -2,14 +2,17 @@
  * normalizeSymbol：把各种用户写法容错解析为统一的 NormalizedSymbol
  *
  * 解析优先级（命中即停）：
- *  1) 点分形式：东财 secid（1.600519 / 116.00700 / 105.AAPL）、后缀（600519.SH）、
+ *  1) 点分形式：东财 secid（1.600519 / 116.00700 / 105.AAPL，特殊指数前缀
+ *     2/100/124 仅当代码命中特殊指数注册表时可解析）、后缀（600519.SH）、
  *     期货交易所（CFFEX.IF2412）、板块（90.BK0475）
  *  2) 字母前缀：sh / sz / bj / hk / us
- *  3) 纯数字：显式 market hint 优先（CN/HK/US 均可强制），无 hint 时
+ *  3) 特殊指数（specialIndex.ts 注册表）：中证 93xxxx / H+5 位 → CN/CSI，
+ *     HSHCI → HK/HSI，GDAXI → GLOBAL/DAX；码形语法确定，assetType 恒为 'index'
+ *  4) 纯数字：显式 market hint 优先（CN/HK/US 均可强制），无 hint 时
  *     6 位→CN（按首位推断交易所）、5/4 位→HK（补零到 5 位）
- *  4) 带 hint 的期货裸合约
- *  5) 纯字母→US
- *  6) 失败抛 InvalidSymbolError
+ *  5) 带 hint 的期货裸合约
+ *  6) 纯字母→US
+ *  7) 失败抛 InvalidSymbolError
  *
  * `hint` 与 `SymbolRef` 字段冲突时，显式入参（SymbolRef）优先。
  * hint 三轴（market / exchange / assetType）统一语义：「确定性校验、歧义消歧」，
@@ -38,6 +41,11 @@ import type {
 } from './types';
 import { inferAShareExchange } from './infer';
 import { FUTURES_EXCHANGES, extractVariety } from './futures';
+import {
+  lookupSpecialIndex,
+  SPECIAL_INDEX_EXCHANGE_MARKET,
+  type SpecialIndexInfo,
+} from './specialIndex';
 
 /**
  * 市场字母标记 → { market, exchange }(F47: 单一来源)。
@@ -89,6 +97,8 @@ const EXCHANGE_MARKET: Partial<Record<Exchange, Market>> = {
   NYSE: 'US',
   AMEX: 'US',
   US: 'US',
+  // 特殊指数机构:从 specialIndex.ts 派生(单源,与下方期货同款做法)
+  ...Object.fromEntries(SPECIAL_INDEX_EXCHANGE_MARKET),
   ...Object.fromEntries(
     Object.values(FUTURES_EXCHANGES).map((fx) => [fx.exchange, fx.market])
   ),
@@ -218,6 +228,13 @@ export function normalizeSymbol(
     };
   };
 
+  // 特殊指数三轴语法确定;裸码与 secid 回读共用,certainty 语义不分叉
+  const finishSpecialIndex = (idx: SpecialIndexInfo): NormalizedSymbol =>
+    finish(idx.market, idx.exchange, idx.code, 'index', undefined, {
+      exchange: true,
+      assetType: true,
+    });
+
   // 点分分支的 code 归一(Review P2-10):HK 数字代码补零到 5 位、US 统一大写,
   // 与前缀/纯数字分支一致 —— 否则 '700.HK' 的行 code='700' 而 'hk700' 的
   // code='00700',code 字段随输入写法漂移,下游跨接口 join/对账静默丢行。
@@ -234,6 +251,13 @@ export function normalizeSymbol(
     const right = code0.slice(dot + 1);
     const upperLeft = left.toUpperCase();
     const upperRight = right.toUpperCase();
+
+    // 特殊指数 secid 回读:仅当前缀与注册表一致时按指数解析('1.930955' 等
+    // 显式其它前缀维持 SECID_MAP 语义,'100.N225' 等未注册码维持解析失败)
+    const dottedSpecialIdx = lookupSpecialIndex(right);
+    if (dottedSpecialIdx && dottedSpecialIdx.secidPrefix === left) {
+      return finishSpecialIndex(dottedSpecialIdx);
+    }
 
     if (/^\d+$/.test(left) && SECID_MAP[left]) {
       const s = SECID_MAP[left];
@@ -272,6 +296,17 @@ export function normalizeSymbol(
       ? PREFIX_MAP[suffixKey]
       : undefined;
     if (suffix) {
+      // 特殊指数码形与 .SH/.SZ/.BJ/.HK 后缀断言矛盾 → 与 hint 轴同口径拒绝
+      // 并指引('.US' 除外:纯字母码属真实美股 ticker 命名空间)
+      if (suffix.market === 'CN' || suffix.market === 'HK') {
+        const idx = lookupSpecialIndex(left);
+        if (idx) {
+          throw new InvalidSymbolError(
+            `${rawInput} (special index code '${idx.code}' conflicts with exchange suffix '${right}'; ` +
+              `use bare '${idx.code}' or secid '${idx.secidPrefix}.${idx.code}')`
+          );
+        }
+      }
       const stripped = stripRedundantPrefix(left, suffix, rawInput);
       return finish(
         suffix.market,
@@ -311,6 +346,17 @@ export function normalizeSymbol(
       const restOk =
         s.market === 'CN' ? /^\d+$/.test(rest) : /^[0-9A-Za-z]+$/.test(rest);
       if (restOk) {
+        // 特殊指数码形与 sh/sz/bj/hk 前缀断言矛盾 → 与后缀/hint 轴同口径拒绝
+        // 并指引(us 前缀除外:纯字母码属真实美股 ticker 命名空间)
+        if (s.market === 'CN' || s.market === 'HK') {
+          const idx = lookupSpecialIndex(rest);
+          if (idx) {
+            throw new InvalidSymbolError(
+              `${rawInput} (special index code '${idx.code}' conflicts with exchange prefix '${p}'; ` +
+                `use bare '${idx.code}' or secid '${idx.secidPrefix}.${idx.code}')`
+            );
+          }
+        }
         const code =
           s.market === 'HK'
             ? rest.padStart(5, '0')
@@ -326,7 +372,14 @@ export function normalizeSymbol(
     }
   }
 
-  // 3) 纯数字：显式 market hint 优先于长度启发式 ——
+  // 3) 特殊指数：须先于纯数字分支，否则 93xxxx 被 inferAShareExchange 按
+  //    「9 开头→沪」误判，拼出 '1.930955' 这类上游静默返空的 secid
+  const specialIdx = lookupSpecialIndex(code0);
+  if (specialIdx) {
+    return finishSpecialIndex(specialIdx);
+  }
+
+  // 4) 纯数字：显式 market hint 优先于长度启发式 ——
   //    {market:'CN'} 时 4/5 位代码不再被强判为港股（修复前 aShareKline/fundFlow
   //    内部以 {market:'CN'} + 用户输入调用，传 '00700' 会静默拿到港股数据）。
   if (/^\d+$/.test(code0)) {
@@ -347,7 +400,7 @@ export function normalizeSymbol(
     return finish('CN', inferAShareExchange(code0), code0, 'stock');
   }
 
-  // 4) 带 hint 的期货裸合约（如 rb2510 + assetType:'futures'）
+  // 5) 带 hint 的期货裸合约（如 rb2510 + assetType:'futures'）
   if (
     (hintAsset === 'futures' || hintMarket === 'GLOBAL') &&
     /[A-Za-z]/.test(code0)
@@ -375,7 +428,7 @@ export function normalizeSymbol(
     );
   }
 
-  // 5) 纯字母 → 美股
+  // 6) 纯字母 → 美股
   if (/^[A-Za-z][A-Za-z.\-]*$/.test(code0)) {
     return finish('US', 'US', code0.toUpperCase(), 'stock');
   }

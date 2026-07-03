@@ -4,7 +4,7 @@
 > 单一事实源）与 `src/types` 自动生成，目的是让 AI 工具**一次性读取** stock-sdk 的全部
 > 命名空间方法、参数与返回数据结构。**请勿手改本文件**——改 spec / types 后重新生成。
 >
-> 版本：v2.2.0 · 文档站：https://stock-sdk.linkdiary.cn · npm: `npm i stock-sdk`
+> 版本：v2.2.1 · 文档站：https://stock-sdk.linkdiary.cn · npm: `npm i stock-sdk`
 
 ## 这是什么
 
@@ -44,7 +44,7 @@ import { screen, backtest } from 'stock-sdk/screener';
 
 ### 安装与模块格式
 
-- 最新版：`npm i stock-sdk`（当前 v2.2.0）
+- 最新版：`npm i stock-sdk`（当前 v2.2.1）
 - v1 旧版（已封存）：`npm i stock-sdk@legacy`
 - **ESM + CommonJS** 双格式；主包 `import { StockSDK } from 'stock-sdk'`
 - 纯计算 subpath：`stock-sdk/{indicators,signals,symbols,screener,cache,errors,mcp}`（tree-shake 友好，不拖入全部 provider）
@@ -153,8 +153,8 @@ Cursor / Claude Desktop 等配置 `mcpServers`：`{ "command": "npx", "args": ["
 
 ### `sdk.kline`
 
-- **`sdk.kline.cn(symbol, options?)`** — A 股 / 指数历史 K 线（日 / 周 / 月，含复权）：开高低收、成交量额、振幅、涨跌幅等。复权默认 qfq（前复权，看走势）；做回测 / 收益计算请显式传 hfq（后复权）或 ''（不复权）。日期格式 YYYYMMDD。
-    - `symbol` (位置参数, 必填): 股票 / 指数代码，如 600519 / sh600519
+- **`sdk.kline.cn(symbol, options?)`** — A 股 / 指数历史 K 线（日 / 周 / 月，含复权）：开高低收、成交量额、振幅、涨跌幅等。复权默认 qfq（前复权，看走势）；做回测 / 收益计算请显式传 hfq（后复权）或 ''（不复权）。支持中证特殊指数码形（93xxxx / H+5 位，如 930955 / H30533）。日期格式 YYYYMMDD。
+    - `symbol` (位置参数, 必填): 股票 / 指数代码，如 600519 / sh600519 / 930955（中证指数）
     - `options.period` (daily | weekly | monthly, 默认 daily, SDK / MCP): 历史 K 线周期
     - `options.adjust` (qfq | hfq | none, 默认 qfq, SDK / MCP): 复权：qfq=前复权(默认,看走势) / hfq=后复权(算收益) / ''=不复权
     - `options.startDate` (string, SDK / MCP): 起始日期 YYYYMMDD
@@ -165,14 +165,14 @@ Cursor / Claude Desktop 等配置 `mcpServers`：`{ "command": "npx", "args": ["
     - `options.adjust` (qfq | hfq | none, 默认 qfq, SDK / MCP): 复权：qfq=前复权(默认,看走势) / hfq=后复权(算收益) / ''=不复权
     - `options.startDate` (string, SDK / MCP): 开始时间
     - `options.endDate` (string, SDK / MCP): 结束时间
-- **`sdk.kline.hk(symbol, options?)`** — 港股历史 K 线（日 / 周 / 月，含复权，币种 HKD）。代码 5 位数字，带不带 hk 前缀均可（如 00700 / hk00700）。复权默认 qfq；日期格式 YYYYMMDD。
-    - `symbol` (位置参数, 必填): 港股代码，如 00700 / hk00700
+- **`sdk.kline.hk(symbol, options?)`** — 港股历史 K 线（日 / 周 / 月，含复权，币种 HKD）。代码 5 位数字，带不带 hk 前缀均可（如 00700 / hk00700）；亦接受恒生特殊指数字母代码（如 HSHCI 恒生医疗保健指数）。复权默认 qfq；日期格式 YYYYMMDD。
+    - `symbol` (位置参数, 必填): 港股代码，如 00700 / hk00700；特殊指数如 HSHCI
     - `options.period` (daily | weekly | monthly, 默认 daily, SDK / MCP): 历史 K 线周期
     - `options.adjust` (qfq | hfq | none, 默认 qfq, SDK / MCP): 复权：qfq=前复权(默认,看走势) / hfq=后复权(算收益) / ''=不复权
     - `options.startDate` (string, SDK / MCP): 起始日期 YYYYMMDD
     - `options.endDate` (string, SDK / MCP): 结束日期 YYYYMMDD
 - **`sdk.kline.hkMinute(symbol, options?)`** — 港股分钟 K 线 / 当日分时。period=1 返回当日分时（不支持复权，可用 recentDays 取近 N 日）；period=5/15/30/60 返回分钟 K 线（adjust 仅此时有效，默认 qfq）。时间格式 YYYY-MM-DD HH:mm（港股本地时区 Asia/Hong_Kong）。
-    - `symbol` (位置参数, 必填): 港股代码，如 00700 / hk00700
+    - `symbol` (位置参数, 必填): 港股代码，如 00700 / hk00700；亦接受特殊指数代码（如 HSHCI）
     - `options.period` (1 | 5 | 15 | 30 | 60, 默认 1, SDK / MCP): 分钟周期；1=当日分时
     - `options.adjust` (qfq | hfq | none, 默认 qfq, SDK / MCP): 复权：qfq=前复权(默认,看走势) / hfq=后复权(算收益) / ''=不复权
     - `options.startDate` (string, SDK / MCP): 开始时间 YYYY-MM-DD HH:mm（港股本地时区）
@@ -3659,6 +3659,7 @@ export type AssetType =
 /**
  * 交易所 / 市场强判别字段。
  * 股票：SSE/SZSE/BSE/HKEX/NASDAQ/NYSE/AMEX；
+ * 指数机构（特殊指数）：CSI（中证指数）/HSI（恒生指数）/DAX（德国 DAX）；
  * 国内期货：SHFE/DCE/CZCE/INE/CFFEX/GFEX；海外期货：COMEX/NYMEX/CBOT/LME。
  * 允许 string 兜底以容纳未来扩展。
  */
@@ -3671,6 +3672,9 @@ export type Exchange =
   | 'NYSE'
   | 'AMEX'
   | 'US'
+  | 'CSI'
+  | 'HSI'
+  | 'DAX'
   | 'SHFE'
   | 'DCE'
   | 'CZCE'

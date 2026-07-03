@@ -20,6 +20,8 @@ import type {
   MarketFundFlow,
 } from '../../types';
 import { normalizeSymbol, toEastmoneySecid } from '../../symbols';
+import { lookupSpecialIndex } from '../../symbols/specialIndex';
+import { InvalidSymbolError } from '../../core/errors';
 
 /** 资金流周期 */
 export interface FundFlowOptions {
@@ -285,7 +287,29 @@ export async function getIndividualFundFlow(
     throw new InvalidArgumentError(`Invalid period: ${period}. Must be daily/weekly/monthly.`);
   }
 
-  const secid = toEastmoneySecid(normalizeSymbol(symbol, { market: 'CN' }));
+  let ns: ReturnType<typeof normalizeSymbol>;
+  try {
+    ns = normalizeSymbol(symbol, { market: 'CN' });
+  } catch (e) {
+    // 非 CN 特殊指数(HSHCI/GDAXI 及其 secid 形)在 hint 冲突处抛错,
+    // 收敛为与下方守卫同一错误类与口径
+    const bareCode = symbol.includes('.')
+      ? symbol.slice(symbol.indexOf('.') + 1)
+      : symbol;
+    if (e instanceof InvalidSymbolError && lookupSpecialIndex(bareCode)) {
+      throw new InvalidArgumentError(
+        `Individual fund flow is not available for index symbols: ${symbol}`
+      );
+    }
+    throw e;
+  }
+  // 仅特殊指数无本接口数据(交易所宿主指数如 1.000001 有,见 getMarketFundFlow)
+  if (ns.assetType === 'index' && lookupSpecialIndex(ns.code)) {
+    throw new InvalidArgumentError(
+      `Individual fund flow is not available for index symbols: ${symbol}`
+    );
+  }
+  const secid = toEastmoneySecid(ns);
 
   const params = new URLSearchParams({
     lmt: '0',

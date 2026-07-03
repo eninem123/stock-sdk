@@ -7,6 +7,7 @@
  */
 import type { NormalizedSymbol } from './types';
 import { InvalidArgumentError } from '../core/errors';
+import { lookupSpecialIndex } from './specialIndex';
 
 /**
  * 交易所 → 东财 secid 数字市场前缀（仅股票类）。
@@ -57,6 +58,13 @@ export function toTencentSymbol(ns: NormalizedSymbol): string {
       return `${prefix}${ns.code}`;
     }
     case 'HK':
+      // 腾讯港股码恒为数字;HSHCI 等字母指数码无对应标的 → fail-fast
+      if (!/^\d+$/.test(ns.code)) {
+        throw new InvalidArgumentError(
+          `Cannot map to Tencent symbol: HK code '${ns.code}' is not numeric`,
+          { market: ns.market, code: ns.code }
+        );
+      }
       return `hk${ns.code.padStart(5, '0')}`;
     case 'US':
       return `us${ns.code}`;
@@ -81,6 +89,15 @@ export function toEastmoneySecid(ns: NormalizedSymbol): string {
         `use the dedicated futures/options provider instead of toEastmoneySecid`,
       { assetType: ns.assetType, exchange: ns.exchange, code: ns.code }
     );
+  }
+  // 特殊指数分类驱动:assetType==='index' 且 exchange 与注册表一致才路由
+  // (显式 secid 前缀断言如 '1.930955' 不被覆盖);须先于 HK 早返回(HSHCI → '124.')。
+  // 未命中注册表的普通指数走交易所前缀 fall-through(沪市 000xxx 已知错宿主,待修)。
+  if (ns.assetType === 'index') {
+    const specialIdx = lookupSpecialIndex(ns.code);
+    if (specialIdx && specialIdx.exchange === ns.exchange) {
+      return `${specialIdx.secidPrefix}.${specialIdx.code}`;
+    }
   }
   if (ns.market === 'HK') {
     return `116.${ns.code.padStart(5, '0')}`;

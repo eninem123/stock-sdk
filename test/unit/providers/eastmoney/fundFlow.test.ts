@@ -57,6 +57,28 @@ describe('FundFlow - getIndividualFundFlow', () => {
       sdk.fundFlow.individual('600000', { period: 'yearly' as never })
     ).rejects.toThrow(/Invalid period/);
   });
+
+  // 特殊指数无个股资金流数据:统一 InvalidArgumentError,请求前 fail-fast
+  it.each(['930955', 'H30533', 'HSHCI', 'GDAXI', '124.HSHCI', '100.GDAXI', '2.930955'])(
+    'rejects special index %s with a uniform InvalidArgumentError before any request',
+    async (code) => {
+      await expect(sdk.fundFlow.individual(code)).rejects.toThrow(
+        /Individual fund flow is not available for index symbols/
+      );
+    }
+  );
+
+  it('exchange-hosted index secid still passes the guard (endpoint serves them)', async () => {
+    server.use(
+      http.get(FFLOW_URL, ({ request }) => {
+        const url = new URL(request.url);
+        expect(url.searchParams.get('secid')).toBe('1.000001');
+        return HttpResponse.json({ data: { klines: [] } });
+      })
+    );
+    // '1.000001'(上证指数,交易所宿主 secid)不应被特殊指数守卫拦截
+    await expect(sdk.fundFlow.individual('1.000001')).resolves.toEqual([]);
+  });
 });
 
 describe('FundFlow - getMarketFundFlow', () => {

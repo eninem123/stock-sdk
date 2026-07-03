@@ -9,6 +9,7 @@
  *    保持手写，可复用 option 片段经 `toOptionSpec` 取自 spec。
  */
 import { marketOf, normalizeSymbol, toTencentSymbol } from '../symbols';
+import { lookupSpecialIndex } from '../symbols/specialIndex';
 import { toNumberArray, invokeMethod } from './dispatch';
 import type { StockSDK } from '../sdk';
 import { CliUsageError } from './errors';
@@ -101,6 +102,13 @@ const LIMIT_OPT: OptionSpec = { flag: 'limit', type: 'number', desc: '只取前 
  */
 function detectMarketTag(symbol: string): 'a' | 'hk' | 'us' {
   const market = marketOf(symbol);
+  // GLOBAL(GDAXI 等)无自动路由标签:直接给出 raw-secid 指引
+  if (market === 'GLOBAL') {
+    throw new CliUsageError(
+      `暂不支持自动路由 GLOBAL 市场符号: ${symbol}`,
+      `海外特殊指数暂无正式 K 线入口,可用 raw-secid 直通: stock-sdk kline 100.GDAXI --market us`
+    );
+  }
   return market === 'HK' ? 'hk' : market === 'US' ? 'us' : 'a';
 }
 
@@ -210,8 +218,19 @@ export const ALIAS_COMMANDS: CommandSpec[] = [
             ? normalizeSymbol(c, { market: tagToMarket(forced) })
             : normalizeSymbol(c);
           if (!forced) tag = ns.market === 'HK' ? 'hk' : ns.market === 'US' ? 'us' : 'a';
+          // 特殊指数无腾讯行情映射(a 组会抛错被吞、hk 组会拼 hkHSHCI)→ 分组前拦截
+          if (ns.assetType === 'index' && lookupSpecialIndex(ns.code)) {
+            throw new CliUsageError(
+              `特殊指数 ${ns.code} 无行情接口`,
+              `行情源(腾讯)不覆盖中证/恒生/海外特殊指数;K 线请用: stock-sdk kline ${ns.code}`
+            );
+          }
           groups[tag].push(tag === 'a' ? toTencentSymbol(ns) : ns.code);
         } catch (e) {
+          // CLI 层主动抛出的用法错误(如上方特殊指数拦截)直接浮出,不参与透传兜底
+          if (e instanceof CliUsageError) {
+            throw e;
+          }
           // R3-7:区分两类解析失败 ——
           // (a) 代码本身可解析(marketOf 给得出市场),却在 forced --market 下抛
           //     InvalidSymbolError:这是 P1-3 的「强制市场与代码确定性解析矛盾」

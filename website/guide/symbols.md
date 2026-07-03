@@ -75,10 +75,11 @@ interface NormalizedSymbol {
 |---|---|---|
 | 1 | 点分形式：东财 secid / 后缀 / 期货交易所 / 板块 | `1.600519`、`600519.SH`、`CFFEX.IF2412`、`90.BK0475` |
 | 2 | 字母前缀 | `sh600519`、`sz000001`、`bj430047`、`hk00700`、`usAAPL` |
-| 3 | 纯数字 | `600519`、`000001`、`00700` |
-| 4 | 带 hint 的期货裸合约 | `rb2510`（配 `assetType:'futures'`） |
-| 5 | 纯字母 → 美股 | `AAPL`、`MSFT` |
-| 6 | 解析失败 → `throw InvalidSymbolError` | `''`、`@@@` |
+| 3 | 特殊指数（按码形 / 具名，见下文） | `930955`、`H30533`、`HSHCI`、`GDAXI` |
+| 4 | 纯数字 | `600519`、`000001`、`00700` |
+| 5 | 带 hint 的期货裸合约 | `rb2510`（配 `assetType:'futures'`） |
+| 6 | 纯字母 → 美股 | `AAPL`、`MSFT` |
+| 7 | 解析失败 → `throw InvalidSymbolError` | `''`、`@@@` |
 
 ### 各市场写法速查
 
@@ -91,9 +92,39 @@ interface NormalizedSymbol {
 | 美股 | `AAPL`、`usAAPL`、`105.AAPL`、`106.BABA` | `US` / `US`（或 NASDAQ / NYSE / AMEX） |
 | 国内期货 | `rb2510`（配 hint）、`CFFEX.IF2412` | `CN` / `SHFE`、`CFFEX` … |
 | 板块 | `90.BK0475` | `CN` / `SSE` / `board` |
+| 特殊指数 | `930955`、`H30533`、`2.930955`、`HSHCI`、`GDAXI` | `CN`/`CSI`、`HK`/`HSI`、`GLOBAL`/`DAX`，assetType 恒为 `index` |
 
 > 港股不足 5 位会自动补零：`700` → `00700`、`hk700` → `00700`。
 > 美股 ticker 会统一转大写：`aapl` → `AAPL`。
+
+### 特殊指数（中证 / 恒生 / 海外）
+
+部分指数在东方财富使用独立的 secid 市场前缀（`2` / `124` / `100`），不走交易所推断。SDK 按**码形规则 + 具名注册表**识别，`assetType` 恒为 `'index'`：
+
+| 家族 | 码形 / 代码 | 规范化结果 | 东财 secid |
+|---|---|---|---|
+| 中证指数（开放家族） | `93xxxx`（如 `930955`、`932000`、`931071`）、`H` + 5 位（如 `H30533`、`H11136`） | `CN` / `CSI` | `2.<code>` |
+| 恒生医疗保健指数 | `HSHCI` | `HK` / `HSI` | `124.HSHCI` |
+| 德国 DAX 指数 | `GDAXI` | `GLOBAL` / `DAX` | `100.GDAXI` |
+
+```ts
+// 中证指数走 CN 链路（kline.cn / getHistoryKline 可直接使用）
+await sdk.kline.cn('930955', { startDate: '20240101', endDate: '20240105' });
+await sdk.kline.cn('H30533');
+
+// HSHCI 归香港市场,走 HK 链路
+await sdk.kline.hk('HSHCI');
+
+// 对应 secid 形式（2.930955 / 2.H30533 / 124.HSHCI / 100.GDAXI）也是合法输入
+normalizeSymbol('2.930955'); // → CN / CSI / index / 930955
+```
+
+注意事项：
+
+- 码形语法确定 `market` / `exchange` / `assetType` 三轴，矛盾的 hint 会抛 `InvalidSymbolError`（如 `kline.cn('HSHCI')` —— HSHCI 属 HK 市场，请改用 `kline.hk`）。
+- 特殊指数无腾讯行情映射，`toTencentSymbol` 会抛 `InvalidArgumentError`；个股资金流（`fundFlow.individual`）同样不支持特殊指数。
+- 中证家族按码形匹配（开放集）：码形合法但实际不存在的代码（如把 `H30533` 误写成 `H30553`）会通过解析、由上游返回空数据，而非本地解析错误——与其它代码族（如 `600520`）行为一致。
+- `GDAXI` 归 `GLOBAL` 市场，暂无正式 K 线入口；可临时用 raw-secid 直通 `sdk.kline.us('100.GDAXI')`（逃生通道：返回数据会按美股模型标注 `currency: 'USD'` 与美东时区，对 DAX 并不准确）。
 
 ## 纯码推断与歧义
 
@@ -101,7 +132,7 @@ interface NormalizedSymbol {
 
 | 形态 | 默认推断 | 交易所细分 |
 |---|---|---|
-| 6 位纯数字 | A 股 stock | `6/5/9` 开头 → SSE；`0/3` 开头 → SZSE；`4/8`、`92` 段 → BSE |
+| 6 位纯数字 | A 股 stock | `6/5/9` 开头 → SSE；`0/3` 开头 → SZSE；`4/8`、`92` 段 → BSE；`93` 段 → 中证指数（见上文「特殊指数」） |
 | 5 位 / 4 位纯数字 | 港股 stock | 补零到 5 位 |
 | 纯字母 | 美股 stock | — |
 

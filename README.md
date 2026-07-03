@@ -58,7 +58,7 @@
 
 - ✅ **零依赖**，浏览器 + Node.js 18+ 双端运行；同时提供 **ESM** 和 **CommonJS**
 - ✅ **命名空间 API**：`sdk.quotes.cn()` / `sdk.kline.cn()` / `sdk.options.etf.dailyKline()`，按领域分组、IDE 自动补全友好
-- ✅ **统一符号模型**：`string` 一等公民，`sh600519` / `600519` / `600519.SH` / `00700` / `hk00700` / `AAPL` / `105.AAPL` 等写法容错解析
+- ✅ **统一符号模型**：`string` 一等公民，`sh600519` / `600519` / `600519.SH` / `00700` / `hk00700` / `AAPL` / `105.AAPL` 等写法容错解析；支持中证等特殊指数（`930955` / `H30533` / `HSHCI` / `GDAXI`，[详见符号指南](https://stock-sdk.linkdiary.cn/guide/symbols.html)）
 - ✅ **A 股 / 港股 / 美股 / 公募基金**实时行情、历史 K 线（日/周/月）、分钟 K 线（1/5/15/30/60）、当日分时
 - ✅ **技术指标**：MA / MACD / BOLL / KDJ / RSI / WR / BIAS / CCI / ATR / OBV / ROC / DMI / SAR / KC
 - ✅ **信号 / 选股 / 回测**：`calcSignals`（金叉死叉/超买超卖等事件识别）、链式选股器、本地回测

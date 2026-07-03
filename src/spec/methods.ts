@@ -561,9 +561,9 @@ export const METHOD_SPECS: MethodSpec[] = [
     mcpDesc:
       'A 股 / 指数历史 K 线（日 / 周 / 月，含复权）：开高低收、成交量额、振幅、涨跌幅等。' +
       "复权默认 qfq（前复权，看走势）；做回测 / 收益计算请显式传 hfq（后复权）或 ''（不复权）。" +
-      '日期格式 YYYYMMDD。',
+      '支持中证特殊指数码形（93xxxx / H+5 位，如 930955 / H30533）。日期格式 YYYYMMDD。',
     argShape: 'symbol+options',
-    positional: [SYMBOL_REQ('股票 / 指数代码，如 600519 / sh600519')],
+    positional: [SYMBOL_REQ('股票 / 指数代码，如 600519 / sh600519 / 930955（中证指数）')],
     params: [PERIOD_DWM, ADJUST, START, END],
   },
   {
@@ -586,9 +586,10 @@ export const METHOD_SPECS: MethodSpec[] = [
     summary: '港股历史K线',
     mcpDesc:
       '港股历史 K 线（日 / 周 / 月，含复权，币种 HKD）。代码 5 位数字，带不带 hk 前缀均可' +
-      '（如 00700 / hk00700）。复权默认 qfq；日期格式 YYYYMMDD。',
+      '（如 00700 / hk00700）；亦接受恒生特殊指数字母代码（如 HSHCI 恒生医疗保健指数）。' +
+      '复权默认 qfq；日期格式 YYYYMMDD。',
     argShape: 'symbol+options',
-    positional: [SYMBOL_REQ('港股代码，如 00700 / hk00700')],
+    positional: [SYMBOL_REQ('港股代码，如 00700 / hk00700；特殊指数如 HSHCI')],
     params: [PERIOD_DWM, ADJUST, START, END],
   },
   // 港/美股分时支持 ndays(SDK/MCP 已支持,此前 CLI 不可达)
@@ -601,7 +602,7 @@ export const METHOD_SPECS: MethodSpec[] = [
       'period=5/15/30/60 返回分钟 K 线（adjust 仅此时有效，默认 qfq）。' +
       '时间格式 YYYY-MM-DD HH:mm（港股本地时区 Asia/Hong_Kong）。',
     argShape: 'symbol+options',
-    positional: [SYMBOL_REQ('港股代码，如 00700 / hk00700')],
+    positional: [SYMBOL_REQ('港股代码，如 00700 / hk00700；亦接受特殊指数代码（如 HSHCI）')],
     params: [PERIOD_MIN, ADJUST, START_MIN_HK, END_MIN_HK, NDAYS],
   },
   {
