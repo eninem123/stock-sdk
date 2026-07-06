@@ -13,8 +13,8 @@
 
 | 文件 | 体积 | Gzip |
 | --- | --- | --- |
-| `dist/index.js` | 3.53 KB | 1.60 KB |
-| `dist/index.cjs` | 5.06 KB | 1.70 KB |
+| `dist/index.js` | 3.56 KB | 1.62 KB |
+| `dist/index.cjs` | 5.11 KB | 1.71 KB |
 
 ## 请求治理能力
 
@@ -44,7 +44,7 @@
 ## 技术指标能力
 
 - 支持的 `IndicatorOptions` 键：`ma`、`macd`、`boll`、`kdj`、`rsi`、`wr`、`bias`、`cci`、`atr`、`obv`、`roc`、`dmi`、`sar`、`kc`
-- 独立导出的计算函数：`calcSMA`、`calcEMA`、`calcWMA`、`calcMA`、`calcMACD`、`calcBOLL`、`calcKDJ`、`calcRSI`、`calcWR`、`calcBIAS`、`calcCCI`、`calcATR`、`calcOBV`、`calcROC`、`calcDMI`、`calcSAR`、`calcKC`
+- 独立导出的计算函数：`calcSMA`、`calcEMA`、`calcWMA`、`calcMA`、`calcMACD`、`calcBOLL`、`calcKDJ`、`calcRSI`、`calcWR`、`calcBIAS`、`calcCCI`、`calcATR`、`calcOBV`、`calcROC`、`calcDMI`、`calcSAR`、`calcKC`、`calcChipDistribution`
 
 ## SDK 方法分组
 
@@ -66,6 +66,12 @@
 - `kline.usMinute`
 - `quotes.timeline`
 - `kline.withIndicators`
+
+### 筹码分布
+
+- `chips.cn`
+- `chips.hk`
+- `chips.us`
 
 ### 板块与扩展数据
 

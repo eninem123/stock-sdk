@@ -61,6 +61,7 @@
 - ✅ **统一符号模型**：`string` 一等公民，`sh600519` / `600519` / `600519.SH` / `00700` / `hk00700` / `AAPL` / `105.AAPL` 等写法容错解析；支持中证等特殊指数（`930955` / `H30533` / `HSHCI` / `GDAXI`，[详见符号指南](https://stock-sdk.linkdiary.cn/guide/symbols.html)）
 - ✅ **A 股 / 港股 / 美股 / 公募基金**实时行情、历史 K 线（日/周/月）、分钟 K 线（1/5/15/30/60）、当日分时
 - ✅ **技术指标**：MA / MACD / BOLL / KDJ / RSI / WR / BIAS / CCI / ATR / OBV / ROC / DMI / SAR / KC
+- ✅ **筹码分布（CYQ）**：`sdk.chips.cn/hk/us` 获利比例 / 平均成本 / 90-70 成本区间与集中度 / 筹码峰直方图（东财算法本地计算，零新增数据源）
 - ✅ **信号 / 选股 / 回测**：`calcSignals`（金叉死叉/超买超卖等事件识别）、链式选股器、本地回测
 - ✅ **期货 / 期权 / 资金流 / 龙虎榜 / 北向 / 大宗交易 / 融资融券 / 涨停板** 等全套扩展数据
 - ✅ **基金深度数据**：历史净值、实时估值、同类排名走势、基金/ETF 分红送配、**主题基金**
@@ -241,6 +242,7 @@ import { SdkError, isSdkError, getSdkErrorCode } from 'stock-sdk/errors';
 | 实时行情 | ✅ | ✅ | ✅ | ✅ | ✅ 全球期货 | ✅ ETF / 中金所 / 商品 |
 | 历史 K 线（日/周/月） | ✅ | ✅ | ✅ | ⚠️ 场内 ETF/LOF | ✅ 国内 + 全球 | ✅ |
 | 分钟 K 线（5/15/30/60） | ✅ | ✅ `kline.hkMinute` | ✅ `kline.usMinute` | ⚠️ 场内 ETF/LOF | ❌ | ❌ |
+| 筹码分布（CYQ） | ✅ `chips.cn` | ✅ `chips.hk` | ✅ `chips.us` | — | — | — |
 | 当日分时（1 分钟） | ✅ `quotes.timeline` | ✅ `kline.hkMinute`(period='1') | ✅ `kline.usMinute`(period='1') | ⚠️ 场内 ETF/LOF | ❌ | ✅ ETF 期权 |
 | 分红派送 | ✅ | ❌ | ❌ | ✅ 基金 + ETF | — | — |
 | 资金流向 | ✅ 个股/大盘/排名/板块 | ❌ | ❌ | — | — | — |
@@ -267,6 +269,7 @@ import { SdkError, isSdkError, getSdkErrorCode } from 'stock-sdk/errors';
 | `sdk.codes` | `.cn` / `.us` / `.hk` / `.fund` |
 | `sdk.batch` | `.cn` / `.hk` / `.us` / `.byCodes` / `.raw` |
 | `sdk.kline` | `.cn` / `.cnMinute` / `.hk` / `.hkMinute` / `.us` / `.usMinute` / `.withIndicators` |
+| `sdk.chips` | `.cn` / `.hk` / `.us`（筹码分布：获利比例 / 平均成本 / 成本区间 / 筹码峰） |
 | `sdk.board` | `.industry.*` / `.concept.*`（`list` / `spot` / `constituents` / `kline` / `minuteKline`） |
 | `sdk.options` | `.index.*` / `.etf.*` / `.commodity.*` / `.cffex.*` / `.lhb` |
 | `sdk.futures` | `.kline` / `.globalSpot` / `.globalKline` / `.inventory` / `.comexInventory` … |

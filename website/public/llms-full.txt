@@ -96,7 +96,7 @@ Cursor / Claude Desktop 等配置 `mcpServers`：`{ "command": "npx", "args": ["
 
 ---
 
-## 一、命名空间方法（共 88 个）
+## 一、命名空间方法（共 91 个）
 
 > 形如 `sdk.quotes.cn(codes)` / `sdk.kline.cn(symbol, options?)`；`codes[]` 形态的方法第一个参数为 **string[]**。
 > 标注 **CLI 专属** 的参数/flag 不应传入 SDK options（除非文档明确说明 SDK 消费）。
@@ -215,6 +215,30 @@ Cursor / Claude Desktop 等配置 `mcpServers`：`{ "command": "npx", "args": ["
     - `--dmi → options.dmi` (boolean, CLI 专属): 启用 DMI
     - `--sar → options.sar` (boolean, CLI 专属): 启用 SAR
     - `--kc → options.kc` (boolean, CLI 专属): 启用 KC
+
+### `sdk.chips`
+
+- **`sdk.chips.cn(symbol, options?)`** — A 股筹码分布 / 筹码峰（基于日 K 线 + 换手率本地计算，东方财富 CYQ 算法）：每日获利比例、平均成本、90/70 成本区间与集中度。days 默认 90；range 为分布回看窗口（默认 120 = 东财 App 口径，0 = 全量累计即 akshare 口径）；复权默认 qfq，对齐 akshare 输出请传 ''。histogram=last 可附带最新一日筹码峰形状。仅个股有意义（指数 / ETF 无换手率概念），长期停牌或极低换手个股的分布参考价值有限。
+    - `symbol` (位置参数, 必填): 股票代码，如 600519 / sh600519
+    - `options.days` (number, 默认 90, SDK / MCP): 返回最近 N 个交易日的筹码分布序列，默认 90
+    - `options.adjust` (qfq | hfq | none, 默认 qfq, SDK / MCP): 复权：qfq=前复权(默认,看走势) / hfq=后复权(算收益) / ''=不复权
+    - `options.range` (number, 默认 120, SDK / MCP): 分布回看窗口(K 线根数)。默认 120 = 东财 App 显示口径；0 = 从上市首日全量累计(akshare stock_cyq_em 口径，计算量更大)
+    - `options.includeHistogram` (last | all, SDK / MCP): 筹码峰直方图(150 价格档的占比分布)：last=仅最后一日附带 / all=每日都附带；不传则不附带
+    - `options.decimals` (number, 默认 3, SDK / MCP): 获利比例 / 集中度的舍入小数位，默认 3(价格类字段固定 2 位)
+- **`sdk.chips.hk(symbol, options?)`** — 港股筹码分布 / 筹码峰（基于东财港股日 K 线 + 换手率本地计算，同 A 股 CYQ 算法）：每日获利比例、平均成本、90/70 成本区间与集中度。days 默认 90；range 默认 120（0 = 全量累计）。注意：价格档精度下限 0.01 元，低价仙股的直方图粒度偏粗；极低换手个股参考价值有限。
+    - `symbol` (位置参数, 必填): 港股代码，如 00700 / hk00700
+    - `options.days` (number, 默认 90, SDK / MCP): 返回最近 N 个交易日的筹码分布序列，默认 90
+    - `options.adjust` (qfq | hfq | none, 默认 qfq, SDK / MCP): 复权：qfq=前复权(默认,看走势) / hfq=后复权(算收益) / ''=不复权
+    - `options.range` (number, 默认 120, SDK / MCP): 分布回看窗口(K 线根数)。默认 120 = 东财 App 显示口径；0 = 从上市首日全量累计(akshare stock_cyq_em 口径，计算量更大)
+    - `options.includeHistogram` (last | all, SDK / MCP): 筹码峰直方图(150 价格档的占比分布)：last=仅最后一日附带 / all=每日都附带；不传则不附带
+    - `options.decimals` (number, 默认 3, SDK / MCP): 获利比例 / 集中度的舍入小数位，默认 3(价格类字段固定 2 位)
+- **`sdk.chips.us(symbol, options?)`** — 美股筹码分布 / 筹码峰（基于东财美股日 K 线 + 换手率本地计算，同 A 股 CYQ 算法）：每日获利比例、平均成本、90/70 成本区间与集中度。days 默认 90；range 默认 120（0 = 全量累计）。换手率为东财口径（交易所公开成交量 / 流通股本），不含暗池细节。
+    - `symbol` (位置参数, 必填): 美股代码，格式 {market}.{ticker}，如 105.AAPL / 106.BABA
+    - `options.days` (number, 默认 90, SDK / MCP): 返回最近 N 个交易日的筹码分布序列，默认 90
+    - `options.adjust` (qfq | hfq | none, 默认 qfq, SDK / MCP): 复权：qfq=前复权(默认,看走势) / hfq=后复权(算收益) / ''=不复权
+    - `options.range` (number, 默认 120, SDK / MCP): 分布回看窗口(K 线根数)。默认 120 = 东财 App 显示口径；0 = 从上市首日全量累计(akshare stock_cyq_em 口径，计算量更大)
+    - `options.includeHistogram` (last | all, SDK / MCP): 筹码峰直方图(150 价格档的占比分布)：last=仅最后一日附带 / all=每日都附带；不传则不附带
+    - `options.decimals` (number, 默认 3, SDK / MCP): 获利比例 / 集中度的舍入小数位，默认 3(价格类字段固定 2 位)
 
 ### `sdk.board`
 
@@ -447,7 +471,7 @@ Cursor / Claude Desktop 等配置 `mcpServers`：`{ "command": "npx", "args": ["
 
 技术指标纯函数（输入 K 线数组，输出指标值）
 
-导出：`calcSMA`, `calcEMA`, `calcWMA`, `calcMA`, `calcMACD`, `calcBOLL`, `calcKDJ`, `calcRSI`, `calcWR`, `calcBIAS`, `calcCCI`, `calcATR`, `calcOBV`, `calcROC`, `calcDMI`, `calcSAR`, `calcKC`, `addIndicators`, `KlineWithIndicators`, `INDICATOR_REGISTRY`, `buildIndicatorContext`, `getEnabledIndicatorKeys`, `estimateIndicatorLookback`, `hasCumulativeIndicator`, `IndicatorKey`
+导出：`calcSMA`, `calcEMA`, `calcWMA`, `calcMA`, `calcMACD`, `calcBOLL`, `calcKDJ`, `calcRSI`, `calcWR`, `calcBIAS`, `calcCCI`, `calcATR`, `calcOBV`, `calcROC`, `calcDMI`, `calcSAR`, `calcKC`, `calcChipDistribution`, `ChipKlineLike`, `ChipHistogram`, `ChipDistributionOptions`, `ChipDistributionItem`, `addIndicators`, `KlineWithIndicators`, `INDICATOR_REGISTRY`, `buildIndicatorContext`, `getEnabledIndicatorKeys`, `estimateIndicatorLookback`, `hasCumulativeIndicator`, `IndicatorKey`
 
 ### `stock-sdk/signals`
 

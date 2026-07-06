@@ -25,6 +25,7 @@
 - 交易日历、市场开休市状态、股票搜索、分红数据
 - 期货数据、期权数据
 - 技术指标计算、指标信号识别、链式选股器、本地回测
+- 筹码分布(A/HK/US,东财 CYQ 算法本地计算:获利比例/平均成本/成本区间/筹码峰)
 - 统一符号模型（多写法容错解析）
 - 内置 CLI（`stock-sdk`）与 MCP server（`stock-sdk mcp`）
 - MCP 文档与 AI 集成支持
@@ -80,6 +81,7 @@ src/
 │   └── utils.ts             # decodeGBK、chunkArray、asyncPool 等
 ├── indicators/              # 技术指标(独立计算函数，零网络)
 │   ├── ma/macd/boll/kdj/rsi/wr/bias/cci/atr/obv/roc/dmi/sar/kc.ts
+│   ├── chip.ts              # 筹码分布(CYQ,东财算法移植;不进 registry)
 │   ├── addIndicators.ts     # 批量聚合
 │   ├── registry.ts          # 指标注册表 / lookback 估算
 │   ├── types.ts
@@ -107,6 +109,7 @@ src/
 │   ├── klineService.ts      # K 线 / 分时(A / HK / US)
 │   ├── boardService.ts      # 行业 / 概念板块
 │   ├── indicatorService.ts  # 带指标 K 线(组合 kline + quote)
+│   ├── chipService.ts       # 筹码分布(组合 kline + 本地 CYQ 计算)
 │   ├── futuresService.ts    # 期货
 │   ├── optionsService.ts    # 期权
 │   ├── fundFlowService.ts   # 资金流向(深度)
@@ -401,6 +404,15 @@ stock-sdk mcp
 | `calcKC(data, options)` | KC |
 | `addIndicators(data, options)` | 批量添加指标 |
 | `INDICATOR_REGISTRY` 等 | 指标注册 / lookback 工具 |
+
+### 筹码分布(chips)
+
+| 方法 | 说明 |
+|------|------|
+| `chips.cn(symbol, options)` | A 股筹码分布(获利比例/平均成本/90-70 成本区间与集中度/筹码峰) |
+| `chips.hk(symbol, options)` | 港股筹码分布 |
+| `chips.us(symbol, options)` | 美股筹码分布 |
+| `calcChipDistribution(klines, options)` | 纯计算入口(`stock-sdk/indicators`,喂含换手率的日 K) |
 
 ### 指标信号 / 选股 / 回测（subpath）
 

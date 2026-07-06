@@ -61,6 +61,7 @@ const zhApiSidebar = {
       text: 'K 线与板块',
       items: [
         { text: 'kline · K线 / 分时', link: '/api/kline' },
+        { text: 'chips · 筹码分布', link: '/api/chips' },
         { text: 'board · 行业 / 概念', link: '/api/board' },
       ],
     },
@@ -174,6 +175,7 @@ const enApiSidebar = {
       text: 'K-line & Boards',
       items: [
         { text: 'kline', link: '/en/api/kline' },
+        { text: 'chips', link: '/en/api/chips' },
         { text: 'board', link: '/en/api/board' },
       ],
     },

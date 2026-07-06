@@ -6,6 +6,7 @@
 export { StockSDK, default } from './sdk';
 export type {
   MarketType,
+  ChipDistributionRequestOptions,
   GetAllAShareQuotesOptions,
   AShareMarket,
   GetAShareCodeListOptions,
@@ -58,6 +59,8 @@ export {
   buildIndicatorContext,
   getEnabledIndicatorKeys,
   estimateIndicatorLookback,
+  // 筹码分布(CYQ)
+  calcChipDistribution,
 } from './indicators';
 
 // 导出指标类型
@@ -85,6 +88,11 @@ export type {
   KCResult,
   KlineWithIndicators,
   IndicatorKey,
+  // 筹码分布类型
+  ChipKlineLike,
+  ChipHistogram,
+  ChipDistributionOptions,
+  ChipDistributionItem,
 } from './indicators';
 
 // 为了向后兼容，导出工具函数

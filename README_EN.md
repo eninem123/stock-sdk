@@ -61,6 +61,7 @@ If you're a frontend engineer, you may have encountered these problems:
 - ✅ **Unified symbol model**: `string` as a first-class input — `sh600519` / `600519` / `600519.SH` / `00700` / `hk00700` / `AAPL` / `105.AAPL` are all parsed tolerantly; special indices supported (`930955` / `H30533` / `HSHCI` / `GDAXI`, [see the symbols guide](https://stock-sdk.linkdiary.cn/en/guide/symbols.html))
 - ✅ **A-shares / HK / US / mutual funds**: real-time quotes, daily/weekly/monthly K-lines, minute K-lines (1/5/15/30/60), intraday time-series
 - ✅ **Technical indicators**: MA / MACD / BOLL / KDJ / RSI / WR / BIAS / CCI / ATR / OBV / ROC / DMI / SAR / KC
+- ✅ **Chip distribution (CYQ)**: `sdk.chips.cn/hk/us` — profit ratio / average cost / 90-70 cost ranges & concentration / chip-peak histogram (Eastmoney's algorithm computed locally, no new data source)
 - ✅ **Signals / screener / backtest**: `calcSignals` (golden/death cross, overbought/oversold, etc.), a chainable screener, local backtesting
 - ✅ **Futures / options / fund flow / dragon-tiger list / northbound / block trades / margin / limit-up pool** and more
 - ✅ **Mutual-fund deep data**: NAV history, intraday estimates, peer-ranking trends, fund/ETF dividends, **theme funds**
@@ -241,6 +242,7 @@ Coverage varies by market — this table helps you quickly check whether the SDK
 | Real-time quotes | ✅ | ✅ | ✅ | ✅ | ✅ global | ✅ ETF / CFFEX / commodity |
 | History K-line (D/W/M) | ✅ | ✅ | ✅ | ⚠️ listed ETF/LOF | ✅ domestic + global | ✅ |
 | Minute K-line (5/15/30/60) | ✅ | ✅ `kline.hkMinute` | ✅ `kline.usMinute` | ⚠️ listed ETF/LOF | ❌ | ❌ |
+| Chip distribution (CYQ) | ✅ `chips.cn` | ✅ `chips.hk` | ✅ `chips.us` | — | — | — |
 | Intraday (1-min) | ✅ `quotes.timeline` | ✅ `kline.hkMinute`(period='1') | ✅ `kline.usMinute`(period='1') | ⚠️ listed ETF/LOF | ❌ | ✅ ETF options |
 | Dividends | ✅ | ❌ | ❌ | ✅ fund + ETF | — | — |
 | Fund flow | ✅ stock/market/rank/sector | ❌ | ❌ | — | — | — |
@@ -267,6 +269,7 @@ Coverage varies by market — this table helps you quickly check whether the SDK
 | `sdk.codes` | `.cn` / `.us` / `.hk` / `.fund` |
 | `sdk.batch` | `.cn` / `.hk` / `.us` / `.byCodes` / `.raw` |
 | `sdk.kline` | `.cn` / `.cnMinute` / `.hk` / `.hkMinute` / `.us` / `.usMinute` / `.withIndicators` |
+| `sdk.chips` | `.cn` / `.hk` / `.us` (chip distribution: profit ratio / avg cost / cost ranges / chip peak) |
 | `sdk.board` | `.industry.*` / `.concept.*` (`list` / `spot` / `constituents` / `kline` / `minuteKline`) |
 | `sdk.options` | `.index.*` / `.etf.*` / `.commodity.*` / `.cffex.*` / `.lhb` |
 | `sdk.futures` | `.kline` / `.globalSpot` / `.globalKline` / `.inventory` / `.comexInventory` … |

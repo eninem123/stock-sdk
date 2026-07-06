@@ -16,6 +16,15 @@ export { calcDMI } from './dmi';
 export { calcSAR } from './sar';
 export { calcKC } from './kc';
 
+// 筹码分布(CYQ,东财算法移植;独立领域对象,不进 INDICATOR_REGISTRY)
+export { calcChipDistribution } from './chip';
+export type {
+  ChipKlineLike,
+  ChipHistogram,
+  ChipDistributionOptions,
+  ChipDistributionItem,
+} from './chip';
+
 // 导出类型
 export * from './types';
 

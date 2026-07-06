@@ -13,6 +13,7 @@
 | 批量行情 | `sdk.batch.cn` / `hk` / `us` / `byCodes` | 全市场或按代码批量取行情 |
 | K 线 | `sdk.kline.cn` / `hk` / `us` / `cnMinute` / `hkMinute` / `usMinute` | 历史 K 线与分钟 K 线 |
 | 带指标 K 线 | `sdk.kline.withIndicators` | K 线 + 内置技术指标 |
+| 筹码分布 | `sdk.chips.cn` / `hk` / `us` | 获利比例 / 平均成本 / 成本区间与集中度 / 筹码峰 |
 | 代码列表 | `sdk.codes.cn` / `us` / `hk` / `fund` | 各市场代码清单 |
 | 板块 | `sdk.board.industry.*` / `sdk.board.concept.*` | 行业 / 概念板块列表、行情、成分、K 线 |
 | 资金流 | `sdk.fundFlow.individual` / `market` / `rank` / `sectorRank` | 个股 / 大盘 / 排行 / 板块资金流 |

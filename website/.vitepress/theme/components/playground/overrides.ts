@@ -50,6 +50,10 @@ export const DEFAULT_VALUES: Record<string, Record<string, string>> = {
   'kline.hkMinute': { symbol: '00700' },
   'kline.us': { symbol: '105.AAPL' },
   'kline.usMinute': { symbol: '105.AAPL' },
+  // ===== chips =====
+  'chips.cn': { symbol: '600519' },
+  'chips.hk': { symbol: '00700' },
+  'chips.us': { symbol: '105.AAPL' },
   // ===== board =====
   'board.industry.spot': { symbol: 'BK0475' },
   'board.industry.constituents': { symbol: 'BK0475' },

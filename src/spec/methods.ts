@@ -297,6 +297,41 @@ const INDICATOR_PARAMS: ParamSpec[] = [
   ),
 ];
 
+// ---------- 筹码分布参数（chips.cn / hk / us 三市场共用） ----------
+const CHIP_DAYS: ParamSpec = {
+  flag: 'days',
+  type: 'number',
+  default: 90,
+  desc: '返回最近 N 个交易日(默认 90)',
+  mcpDesc: '返回最近 N 个交易日的筹码分布序列，默认 90',
+};
+const CHIP_RANGE: ParamSpec = {
+  flag: 'range',
+  type: 'number',
+  default: 120,
+  desc: '分布回看窗口根数(默认 120,0=全量累计)',
+  mcpDesc:
+    '分布回看窗口(K 线根数)。默认 120 = 东财 App 显示口径；0 = 从上市首日全量累计(akshare stock_cyq_em 口径，计算量更大)',
+};
+const CHIP_HISTOGRAM: ParamSpec = {
+  flag: 'histogram',
+  field: 'includeHistogram',
+  type: 'enum',
+  enum: ['last', 'all'],
+  desc: '附带筹码峰直方图 last=仅最后一日 / all=每日(不传则不附带)',
+  mcpDesc:
+    '筹码峰直方图(150 价格档的占比分布)：last=仅最后一日附带 / all=每日都附带；不传则不附带',
+};
+const CHIP_DECIMALS: ParamSpec = {
+  flag: 'decimals',
+  type: 'number',
+  default: 3,
+  desc: '比例类字段舍入小数位(默认 3)',
+  mcpDesc: '获利比例 / 集中度的舍入小数位，默认 3(价格类字段固定 2 位)',
+};
+/** chips 三市场共用参数序列 */
+const CHIP_PARAMS: ParamSpec[] = [CHIP_DAYS, ADJUST, CHIP_RANGE, CHIP_HISTOGRAM, CHIP_DECIMALS];
+
 // fundFlow 排名参数（CLI 现状未声明 → 保持透传，仅 MCP 声明）
 const FF_INDICATOR: ParamSpec = {
   flag: 'indicator',
@@ -649,6 +684,46 @@ export const METHOD_SPECS: MethodSpec[] = [
     positional: [SYMBOL_REQ('股票代码（A 股 / 港股 / 美股）')],
     params: [PERIOD_DWM, ADJUST, START, END, MARKET_ENUM, ...INDICATOR_PARAMS],
     mcpCustom: true,
+  },
+  // ===== chips (3) =====
+  {
+    path: ['chips', 'cn'],
+    toolName: 'get_chip_distribution',
+    tier: 'core',
+    summary: 'A股筹码分布',
+    mcpDesc:
+      'A 股筹码分布 / 筹码峰（基于日 K 线 + 换手率本地计算，东方财富 CYQ 算法）：' +
+      '每日获利比例、平均成本、90/70 成本区间与集中度。' +
+      'days 默认 90；range 为分布回看窗口（默认 120 = 东财 App 口径，0 = 全量累计即 akshare 口径）；' +
+      "复权默认 qfq，对齐 akshare 输出请传 ''。histogram=last 可附带最新一日筹码峰形状。" +
+      '仅个股有意义（指数 / ETF 无换手率概念），长期停牌或极低换手个股的分布参考价值有限。',
+    argShape: 'symbol+options',
+    positional: [SYMBOL_REQ('股票代码，如 600519 / sh600519')],
+    params: CHIP_PARAMS,
+  },
+  {
+    path: ['chips', 'hk'],
+    toolName: 'get_hk_chip_distribution',
+    summary: '港股筹码分布',
+    mcpDesc:
+      '港股筹码分布 / 筹码峰（基于东财港股日 K 线 + 换手率本地计算，同 A 股 CYQ 算法）：' +
+      '每日获利比例、平均成本、90/70 成本区间与集中度。days 默认 90；range 默认 120（0 = 全量累计）。' +
+      '注意：价格档精度下限 0.01 元，低价仙股的直方图粒度偏粗；极低换手个股参考价值有限。',
+    argShape: 'symbol+options',
+    positional: [SYMBOL_REQ('港股代码，如 00700 / hk00700')],
+    params: CHIP_PARAMS,
+  },
+  {
+    path: ['chips', 'us'],
+    toolName: 'get_us_chip_distribution',
+    summary: '美股筹码分布',
+    mcpDesc:
+      '美股筹码分布 / 筹码峰（基于东财美股日 K 线 + 换手率本地计算，同 A 股 CYQ 算法）：' +
+      '每日获利比例、平均成本、90/70 成本区间与集中度。days 默认 90；range 默认 120（0 = 全量累计）。' +
+      '换手率为东财口径（交易所公开成交量 / 流通股本），不含暗池细节。',
+    argShape: 'symbol+options',
+    positional: [SYMBOL_REQ('美股代码，格式 {market}.{ticker}，如 105.AAPL / 106.BABA')],
+    params: CHIP_PARAMS,
   },
   // ===== board (10) =====
   {
