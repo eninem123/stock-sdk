@@ -50,6 +50,10 @@ export const DEFAULT_VALUES: Record<string, Record<string, string>> = {
   'kline.hkMinute': { symbol: '00700' },
   'kline.us': { symbol: '105.AAPL' },
   'kline.usMinute': { symbol: '105.AAPL' },
+  // ===== chips =====
+  'chips.cn': { symbol: '600519' },
+  'chips.hk': { symbol: '00700' },
+  'chips.us': { symbol: '105.AAPL' },
   // ===== board =====
   'board.industry.spot': { symbol: 'BK0475' },
   'board.industry.constituents': { symbol: 'BK0475' },
@@ -74,6 +78,9 @@ export const DEFAULT_VALUES: Record<string, Record<string, string>> = {
   'fundFlow.sectorHistory': { symbol: 'BK0438' },
   // ===== northbound =====
   'northbound.individual': { symbol: '600519' },
+  // ===== marketEvent =====
+  'marketEvent.individualChanges': { symbol: '600519' },
+  'marketEvent.individualChangesHistory': { symbol: '600519' },
   // ===== dragonTiger（detail/institution 必填日期区间 → 近 7 天） =====
   'dragonTiger.detail': { startDate: dt7.start, endDate: dt7.end },
   'dragonTiger.institution': { startDate: dt7.start, endDate: dt7.end },

@@ -32,12 +32,20 @@ describe('namespace API — 一级命名空间', () => {
     expect(typeof sdk.kline.withIndicators).toBe('function');
   });
 
+  it('chips (筹码分布,三市场)', () => {
+    expect(typeof sdk.chips.cn).toBe('function');
+    expect(typeof sdk.chips.hk).toBe('function');
+    expect(typeof sdk.chips.us).toBe('function');
+  });
+
   it('futures / fundFlow / northbound / marketEvent / dragonTiger', () => {
     expect(typeof sdk.futures.kline).toBe('function');
     expect(typeof sdk.futures.comexInventory).toBe('function');
     expect(typeof sdk.fundFlow.individual).toBe('function');
     expect(typeof sdk.northbound.minute).toBe('function');
     expect(typeof sdk.marketEvent.ztPool).toBe('function');
+    expect(typeof sdk.marketEvent.individualChanges).toBe('function');
+    expect(typeof sdk.marketEvent.individualChangesHistory).toBe('function');
     expect(typeof sdk.dragonTiger.detail).toBe('function');
   });
 

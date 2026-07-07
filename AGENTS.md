@@ -18,13 +18,14 @@
 - 行业板块、概念板块数据
 - 资金流向（个股 / 大盘 / 排名 / 板块深度）、盘口大单
 - 沪深港通 / 北向资金（分时 / 汇总 / 持股排行 / 历史）
-- 涨停跌停股池（含连板数）、盘口异动、板块异动
+- 涨停跌停股池（含连板数）、盘口异动（支持多类型/all + 个股当日与近 N 天异动历史）、板块异动
 - 龙虎榜（详情 / 个股统计 / 机构 / 营业部 / 席位明细）
 - 大宗交易、融资融券
 - 公募基金扩展（分红 / 历史净值 / 实时估值 / 同类排名 / 档案）
 - 交易日历、市场开休市状态、股票搜索、分红数据
 - 期货数据、期权数据
 - 技术指标计算、指标信号识别、链式选股器、本地回测
+- 筹码分布(A/HK/US,东财 CYQ 算法本地计算:获利比例/平均成本/成本区间/筹码峰)
 - 统一符号模型（多写法容错解析）
 - 内置 CLI（`stock-sdk`）与 MCP server（`stock-sdk mcp`）
 - MCP 文档与 AI 集成支持
@@ -80,6 +81,7 @@ src/
 │   └── utils.ts             # decodeGBK、chunkArray、asyncPool 等
 ├── indicators/              # 技术指标(独立计算函数，零网络)
 │   ├── ma/macd/boll/kdj/rsi/wr/bias/cci/atr/obv/roc/dmi/sar/kc.ts
+│   ├── chip.ts              # 筹码分布(CYQ,东财算法移植;不进 registry)
 │   ├── addIndicators.ts     # 批量聚合
 │   ├── registry.ts          # 指标注册表 / lookback 估算
 │   ├── types.ts
@@ -107,6 +109,7 @@ src/
 │   ├── klineService.ts      # K 线 / 分时(A / HK / US)
 │   ├── boardService.ts      # 行业 / 概念板块
 │   ├── indicatorService.ts  # 带指标 K 线(组合 kline + quote)
+│   ├── chipService.ts       # 筹码分布(组合 kline + 本地 CYQ 计算)
 │   ├── futuresService.ts    # 期货
 │   ├── optionsService.ts    # 期权
 │   ├── fundFlowService.ts   # 资金流向(深度)
@@ -402,6 +405,15 @@ stock-sdk mcp
 | `addIndicators(data, options)` | 批量添加指标 |
 | `INDICATOR_REGISTRY` 等 | 指标注册 / lookback 工具 |
 
+### 筹码分布(chips)
+
+| 方法 | 说明 |
+|------|------|
+| `chips.cn(symbol, options)` | A 股筹码分布(获利比例/平均成本/90-70 成本区间与集中度/筹码峰) |
+| `chips.hk(symbol, options)` | 港股筹码分布 |
+| `chips.us(symbol, options)` | 美股筹码分布 |
+| `calcChipDistribution(klines, options)` | 纯计算入口(`stock-sdk/indicators`,喂含换手率的日 K) |
+
 ### 指标信号 / 选股 / 回测（subpath）
 
 | 方法 | 说明 |
@@ -505,7 +517,9 @@ stock-sdk mcp
 | 方法 | 说明 |
 |------|------|
 | `marketEvent.ztPool(type, date?)` | 涨停 / 跌停 / 强势等股池（含连板数） |
-| `marketEvent.stockChanges(type)` | 盘口异动（22 种类型） |
+| `marketEvent.stockChanges(type)` | 盘口异动（22 种类型;支持数组多类型 / 'all' 自动翻页收全） |
+| `marketEvent.individualChanges(symbol, options)` | 个股当日异动事件流（全类型;服务端窗口约最近 17 个交易日） |
+| `marketEvent.individualChangesHistory(symbol, options)` | 个股近 N 天异动历史（逐交易日聚合,coverage/available 标注 + stats 计数） |
 | `marketEvent.boardChanges()` | 当日板块异动 |
 
 ### 龙虎榜

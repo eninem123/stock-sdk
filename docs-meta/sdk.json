@@ -114,6 +114,15 @@
         ]
       },
       {
+        "titleZh": "筹码分布",
+        "titleEn": "Chip Distribution",
+        "methods": [
+          "chips.cn",
+          "chips.hk",
+          "chips.us"
+        ]
+      },
+      {
         "titleZh": "板块与扩展数据",
         "titleEn": "Boards & Extended Data",
         "methods": [
@@ -204,7 +213,9 @@
         "methods": [
           "marketEvent.ztPool",
           "marketEvent.stockChanges",
-          "marketEvent.boardChanges"
+          "marketEvent.boardChanges",
+          "marketEvent.individualChanges",
+          "marketEvent.individualChangesHistory"
         ]
       },
       {

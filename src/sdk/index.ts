@@ -8,11 +8,19 @@ export {
   type MarketType,
   type KlineWithIndicatorsOptions,
 } from './indicatorService';
+export {
+  ChipService,
+  type ChipDistributionRequestOptions,
+} from './chipService';
 
 // 资金流向 / 北向 / 涨停板 / 龙虎榜 / 大宗 + 融资融券
 export { FundFlowService } from './fundFlowService';
 export { NorthboundService } from './northboundService';
-export { MarketEventService } from './marketEventService';
+export {
+  MarketEventService,
+  type IndividualChangesOptions,
+  type IndividualChangesHistoryOptions,
+} from './marketEventService';
 export { DragonTigerService } from './dragonTigerService';
 export { DataService } from './dataService';
 

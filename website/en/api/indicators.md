@@ -49,6 +49,7 @@ Rounding indicators (`calcMA` / `calcMACD` / `calcBOLL` / `calcKDJ` / `calcRSI` 
 | `calcDMI(data, opts?)` | Directional Movement Index, returns `{ pdi, mdi, adx, adxr }` |
 | `calcSAR(data, opts?)` | Parabolic SAR, returns `{ sar, trend, ep, af }` |
 | `calcKC(data, opts?)` | Keltner Channel, returns `{ mid, upper, lower, width }` |
+| `calcChipDistribution(klines, opts?)` | Chip distribution (daily K-lines with turnover rate): per-day profit ratio / avg cost / cost ranges / chip peak — see [chips](/en/api/chips) |
 | `addIndicators(klines, opts?)` | Attach multiple indicators onto K-lines at once, returns `KlineWithIndicators[]` |
 
 > Each function takes optional options (periods, multipliers, etc.); omit them to use common defaults. Exact fields and defaults follow the implementation.

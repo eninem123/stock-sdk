@@ -11,6 +11,7 @@ export const categories: CategorySpec[] = [
   { key: 'codes', label: '代码列表', icon: 'lucide:list-ordered', color: '#a16207' },
   { key: 'batch', label: '批量行情', icon: 'lucide:layers', color: '#ea580c' },
   { key: 'kline', label: 'K 线', icon: 'lucide:candlestick-chart', color: '#b91c1c' },
+  { key: 'chips', label: '筹码分布', icon: 'lucide:bar-chart-big', color: '#be123c' },
   { key: 'board', label: '行业 / 概念板块', icon: 'lucide:layout-grid', color: '#c2410c' },
   { key: 'options', label: '期权', icon: 'lucide:diamond', color: '#9333ea' },
   { key: 'futures', label: '期货', icon: 'lucide:flame', color: '#d97706' },

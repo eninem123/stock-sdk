@@ -23,4 +23,11 @@ describe('模块导出', () => {
     expect(module.INDICATOR_REGISTRY).toBeDefined();
     expect(module.getSdkErrorCode).toBeDefined();
   });
+
+  it('should export calcChipDistribution from root and indicators subpath', async () => {
+    const root = await import('../../../src/index');
+    expect(root.calcChipDistribution).toBeDefined();
+    const indicators = await import('../../../src/indicators');
+    expect(indicators.calcChipDistribution).toBeDefined();
+  });
 });

@@ -37,6 +37,7 @@ const zhGuideSidebar = {
         { text: '请求治理', link: '/guide/request-governance' },
         { text: '错误处理与重试', link: '/guide/retry' },
         { text: '技术指标与信号', link: '/guide/indicators' },
+        { text: '个股 30 天异动全景', link: '/guide/stock-changes-panorama' },
         { text: '期货与期权', link: '/guide/futures-options' },
         { text: '复权说明 (qfq/hfq)', link: '/guide/dividend-adjustment' },
         { text: '浏览器使用', link: '/guide/browser' },
@@ -61,6 +62,7 @@ const zhApiSidebar = {
       text: 'K 线与板块',
       items: [
         { text: 'kline · K线 / 分时', link: '/api/kline' },
+        { text: 'chips · 筹码分布', link: '/api/chips' },
         { text: 'board · 行业 / 概念', link: '/api/board' },
       ],
     },
@@ -150,6 +152,7 @@ const enGuideSidebar = {
         { text: 'Request Governance', link: '/en/guide/request-governance' },
         { text: 'Errors & Retry', link: '/en/guide/retry' },
         { text: 'Indicators & Signals', link: '/en/guide/indicators' },
+        { text: '30-Day Changes Panorama', link: '/en/guide/stock-changes-panorama' },
         { text: 'Futures & Options', link: '/en/guide/futures-options' },
         { text: 'Adjustment (qfq/hfq)', link: '/en/guide/dividend-adjustment' },
         { text: 'Browser Usage', link: '/en/guide/browser' },
@@ -174,6 +177,7 @@ const enApiSidebar = {
       text: 'K-line & Boards',
       items: [
         { text: 'kline', link: '/en/api/kline' },
+        { text: 'chips', link: '/en/api/chips' },
         { text: 'board', link: '/en/api/board' },
       ],
     },

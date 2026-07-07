@@ -136,6 +136,8 @@ const STOCK_CHANGE_TYPES: string[] = [
   'low_60d', // 60 日新低
   'drop_60d', // 60 日大幅下跌
 ];
+/** 盘口异动类型 + 'all'(一次拉全部 22 类;SDK 层还支持数组,CLI/MCP 用 all 即可) */
+const STOCK_CHANGE_TYPES_WITH_ALL: string[] = [...STOCK_CHANGE_TYPES, 'all'];
 
 // ---------- 可复用参数片段（CLI 旧 manifest 的 option 片段在此单一来源化） ----------
 /** 复权（个股/期货 K 线默认 qfq；板块用 BOARD_ADJUST 变体覆盖默认与 MCP 文案）。 */
@@ -296,6 +298,41 @@ const INDICATOR_PARAMS: ParamSpec[] = [
     (flag): ParamSpec => ({ flag, type: 'boolean', mcp: false, desc: `启用 ${flag.toUpperCase()}` })
   ),
 ];
+
+// ---------- 筹码分布参数（chips.cn / hk / us 三市场共用） ----------
+const CHIP_DAYS: ParamSpec = {
+  flag: 'days',
+  type: 'number',
+  default: 90,
+  desc: '返回最近 N 个交易日(默认 90)',
+  mcpDesc: '返回最近 N 个交易日的筹码分布序列，默认 90',
+};
+const CHIP_RANGE: ParamSpec = {
+  flag: 'range',
+  type: 'number',
+  default: 120,
+  desc: '分布回看窗口根数(默认 120,0=全量累计)',
+  mcpDesc:
+    '分布回看窗口(K 线根数)。默认 120 = 东财 App 显示口径；0 = 从上市首日全量累计(akshare stock_cyq_em 口径，计算量更大)',
+};
+const CHIP_HISTOGRAM: ParamSpec = {
+  flag: 'histogram',
+  field: 'includeHistogram',
+  type: 'enum',
+  enum: ['last', 'all'],
+  desc: '附带筹码峰直方图 last=仅最后一日 / all=每日(不传则不附带)',
+  mcpDesc:
+    '筹码峰直方图(150 价格档的占比分布)：last=仅最后一日附带 / all=每日都附带；不传则不附带',
+};
+const CHIP_DECIMALS: ParamSpec = {
+  flag: 'decimals',
+  type: 'number',
+  default: 3,
+  desc: '比例类字段舍入小数位(默认 3)',
+  mcpDesc: '获利比例 / 集中度的舍入小数位，默认 3(价格类字段固定 2 位)',
+};
+/** chips 三市场共用参数序列 */
+const CHIP_PARAMS: ParamSpec[] = [CHIP_DAYS, ADJUST, CHIP_RANGE, CHIP_HISTOGRAM, CHIP_DECIMALS];
 
 // fundFlow 排名参数（CLI 现状未声明 → 保持透传，仅 MCP 声明）
 const FF_INDICATOR: ParamSpec = {
@@ -649,6 +686,46 @@ export const METHOD_SPECS: MethodSpec[] = [
     positional: [SYMBOL_REQ('股票代码（A 股 / 港股 / 美股）')],
     params: [PERIOD_DWM, ADJUST, START, END, MARKET_ENUM, ...INDICATOR_PARAMS],
     mcpCustom: true,
+  },
+  // ===== chips (3) =====
+  {
+    path: ['chips', 'cn'],
+    toolName: 'get_chip_distribution',
+    tier: 'core',
+    summary: 'A股筹码分布',
+    mcpDesc:
+      'A 股筹码分布 / 筹码峰（基于日 K 线 + 换手率本地计算，东方财富 CYQ 算法）：' +
+      '每日获利比例、平均成本、90/70 成本区间与集中度。' +
+      'days 默认 90；range 为分布回看窗口（默认 120 = 东财 App 口径，0 = 全量累计即 akshare 口径）；' +
+      "复权默认 qfq，对齐 akshare 输出请传 ''。histogram=last 可附带最新一日筹码峰形状。" +
+      '仅个股有意义（指数 / ETF 无换手率概念），长期停牌或极低换手个股的分布参考价值有限。',
+    argShape: 'symbol+options',
+    positional: [SYMBOL_REQ('股票代码，如 600519 / sh600519')],
+    params: CHIP_PARAMS,
+  },
+  {
+    path: ['chips', 'hk'],
+    toolName: 'get_hk_chip_distribution',
+    summary: '港股筹码分布',
+    mcpDesc:
+      '港股筹码分布 / 筹码峰（基于东财港股日 K 线 + 换手率本地计算，同 A 股 CYQ 算法）：' +
+      '每日获利比例、平均成本、90/70 成本区间与集中度。days 默认 90；range 默认 120（0 = 全量累计）。' +
+      '注意：价格档精度下限 0.01 元，低价仙股的直方图粒度偏粗；极低换手个股参考价值有限。',
+    argShape: 'symbol+options',
+    positional: [SYMBOL_REQ('港股代码，如 00700 / hk00700')],
+    params: CHIP_PARAMS,
+  },
+  {
+    path: ['chips', 'us'],
+    toolName: 'get_us_chip_distribution',
+    summary: '美股筹码分布',
+    mcpDesc:
+      '美股筹码分布 / 筹码峰（基于东财美股日 K 线 + 换手率本地计算，同 A 股 CYQ 算法）：' +
+      '每日获利比例、平均成本、90/70 成本区间与集中度。days 默认 90；range 默认 120（0 = 全量累计）。' +
+      '换手率为东财口径（交易所公开成交量 / 流通股本），不含暗池细节。',
+    argShape: 'symbol+options',
+    positional: [SYMBOL_REQ('美股代码，格式 {market}.{ticker}，如 105.AAPL / 106.BABA')],
+    params: CHIP_PARAMS,
   },
   // ===== board (10) =====
   {
@@ -1027,7 +1104,7 @@ export const METHOD_SPECS: MethodSpec[] = [
     positional: [SYMBOL_REQ(STOCK_SYMBOL_DESC)],
     params: [START_NB_MCP_ONLY, END_NB_MCP_ONLY],
   },
-  // ===== marketEvent (3) =====
+  // ===== marketEvent (5) =====
   {
     path: ['marketEvent', 'ztPool'],
     toolName: 'get_zt_pool',
@@ -1051,23 +1128,66 @@ export const METHOD_SPECS: MethodSpec[] = [
   {
     path: ['marketEvent', 'stockChanges'],
     toolName: 'get_stock_changes',
-    summary: '盘口异动',
+    summary: '盘口异动(type 可传 all 拉全类型)',
     mcpDesc:
-      '获取当日盘口异动列表（东方财富）：每条含发生时间(HH:MM:SS)、代码、名称、异动类型及中文标签、相关信息。' +
-      'type 不传默认 large_buy(大笔买入)。',
+      '获取当日盘口异动列表（东方财富）：每条含发生时间(HH:MM:SS)、代码、名称、异动类型(changeType/typeCode)及中文标签、相关信息。' +
+      "type 不传默认 large_buy(大笔买入);传 'all' 一次拉取全部 22 类(总量可达上万条,自动翻页收全,MCP tools/call 超 200 条会被裁剪)。",
     argShape: 'positional',
     positional: [
       {
         name: 'type',
-        enum: STOCK_CHANGE_TYPES,
+        enum: STOCK_CHANGE_TYPES_WITH_ALL,
         default: 'large_buy',
         desc:
-          '异动类型筛选：rocket_launch=火箭发射 / quick_rebound=快速反弹 / large_buy=大笔买入 / ' +
+          '异动类型筛选(all=全部 22 类)：rocket_launch=火箭发射 / quick_rebound=快速反弹 / large_buy=大笔买入 / ' +
           'limit_up_seal=封涨停板 / limit_down_open=打开跌停板 / big_buy_order=有大买盘 / auction_up=竞价上涨 / ' +
           'high_open_5d=高开5日线 / gap_up=向上缺口 / high_60d=60日新高 / surge_60d=60日大幅上涨 / ' +
           'accelerate_down=加速下跌 / high_dive=高台跳水 / large_sell=大笔卖出 / limit_down_seal=封跌停板 / ' +
           'limit_up_open=打开涨停板 / big_sell_order=有大卖盘 / auction_down=竞价下跌 / low_open_5d=低开5日线 / ' +
           'gap_down=向下缺口 / low_60d=60日新低 / drop_60d=60日大幅下跌',
+      },
+    ],
+  },
+  {
+    path: ['marketEvent', 'individualChanges'],
+    toolName: 'get_individual_stock_changes',
+    summary: '个股当日盘口异动',
+    mcpDesc:
+      '获取单只 A 股某个交易日的盘口异动事件流（东方财富）：时间、类型(changeType/typeCode,含中文标签)、' +
+      '触发价(元)、涨跌幅(%)、相关信息;全部类型一次返回,最新在前。date 不传为今天。' +
+      '注意:服务端仅保留约最近数周数据(且可能有个别日期空洞),无数据日期返回空数组;' +
+      '需要区分"超窗"与"当日无异动"请用 get_individual_stock_changes_history(逐日带 available 标记)。',
+    argShape: 'symbol+options',
+    positional: [SYMBOL_REQ('股票代码，如 600519 / sh600519')],
+    params: [
+      {
+        flag: 'date',
+        type: 'string',
+        desc: '交易日 YYYYMMDD 或 YYYY-MM-DD,不传为今天',
+        mcpDesc: '交易日 YYYYMMDD 或 YYYY-MM-DD;不传为北京时间今天',
+      },
+    ],
+  },
+  {
+    path: ['marketEvent', 'individualChangesHistory'],
+    toolName: 'get_individual_stock_changes_history',
+    summary: '个股近N天异动历史(--days 7)',
+    mcpDesc:
+      '聚合单只 A 股最近 N 个自然日的盘口异动（按交易日历逐交易日请求后合并）：' +
+      'days 数组按日期升序,每日含 available 标记与事件流;coverage 标注实际覆盖范围' +
+      '(服务端仅保留约最近数周且可能有空洞日,无数据日期 available=false);' +
+      'stats 以原始类型码为键给出各类型计数(含中文标签)。days 默认 7,范围 1~60。' +
+      '⚠️ 返回为嵌套对象:序列化超约 80KB 会被整体省略(仅返回提示,拿不到任何数据);' +
+      '事件多的活跃标的请用较小 days 分段查询,或改用 get_individual_stock_changes 逐日获取。',
+    argShape: 'symbol+options',
+    positional: [SYMBOL_REQ('股票代码，如 600519 / sh600519')],
+    params: [
+      {
+        flag: 'days',
+        type: 'number',
+        default: 7,
+        desc: '最近 N 个自然日(1~60,默认 7)',
+        mcpDesc: '最近 N 个自然日,默认 7,最大 60',
       },
     ],
   },

@@ -9,6 +9,7 @@ import type {
 
 import {
   BoardService,
+  ChipService,
   FuturesService,
   IndicatorService,
   KlineService,
@@ -42,6 +43,7 @@ export class StockSDK {
   private readonly futuresService: FuturesService;
   private readonly optionsService: OptionsService;
   private readonly indicatorService: IndicatorService;
+  private readonly chipService: ChipService;
   private readonly fundFlowService: FundFlowService;
   private readonly northboundService: NorthboundService;
   private readonly marketEventService: MarketEventService;
@@ -66,9 +68,10 @@ export class StockSDK {
       this.klineService,
       this.quoteService
     );
+    this.chipService = new ChipService(this.klineService);
     this.fundFlowService = new FundFlowService(this.client);
     this.northboundService = new NorthboundService(this.client);
-    this.marketEventService = new MarketEventService(this.client);
+    this.marketEventService = new MarketEventService(this.client, this.quoteService);
     this.dragonTigerService = new DragonTigerService(this.client);
     this.dataService = new DataService(this.client);
     this.tradingCalendarService = new TradingCalendarService(this.quoteService);
@@ -149,6 +152,18 @@ export class StockSDK {
         us: k.getUSHistoryKline.bind(k),
         usMinute: k.getUSMinuteKline.bind(k),
         withIndicators: ind.getKlineWithIndicators.bind(ind),
+      };
+    });
+  }
+
+  /** 筹码分布（A 股 / 港股 / 美股,基于日 K + 换手率本地计算） */
+  get chips() {
+    return this.memoNs('chips', () => {
+      const c = this.chipService;
+      return {
+        cn: c.getChipDistribution.bind(c),
+        hk: c.getHKChipDistribution.bind(c),
+        us: c.getUSChipDistribution.bind(c),
       };
     });
   }
@@ -255,6 +270,8 @@ export class StockSDK {
         ztPool: m.getZTPool.bind(m),
         stockChanges: m.getStockChanges.bind(m),
         boardChanges: m.getBoardChanges.bind(m),
+        individualChanges: m.getIndividualChanges.bind(m),
+        individualChangesHistory: m.getIndividualChangesHistory.bind(m),
       };
     });
   }
@@ -346,6 +363,12 @@ export class StockSDK {
   }
 }
 
-export type { MarketType, KlineWithIndicatorsOptions } from './sdk/index';
+export type {
+  MarketType,
+  KlineWithIndicatorsOptions,
+  ChipDistributionRequestOptions,
+  IndividualChangesOptions,
+  IndividualChangesHistoryOptions,
+} from './sdk/index';
 
 export default StockSDK;

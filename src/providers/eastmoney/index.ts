@@ -128,6 +128,8 @@ export {
 export {
   getZTPool,
   getStockChanges,
+  getIndividualStockChanges,
+  assertCnStockSymbol,
   getBoardChanges,
 } from './topicData';
 

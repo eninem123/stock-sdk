@@ -49,6 +49,7 @@ interface OHLCV {
 | `calcDMI(data, opts?)` | 动向指标，返回 `{ pdi, mdi, adx, adxr }` |
 | `calcSAR(data, opts?)` | 抛物线转向，返回 `{ sar, trend, ep, af }` |
 | `calcKC(data, opts?)` | 肯特纳通道，返回 `{ mid, upper, lower, width }` |
+| `calcChipDistribution(klines, opts?)` | 筹码分布（需含换手率的日 K），返回每日获利比例 / 平均成本 / 成本区间 / 筹码峰，详见 [chips](/api/chips) |
 | `addIndicators(klines, opts?)` | 一次性把多个指标贴到 K 线上，返回 `KlineWithIndicators[]` |
 
 > 每个函数都接受可选的 options（周期、参数倍数等），不传则用常用默认值。具体字段与默认值以实现为准。
