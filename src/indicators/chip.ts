@@ -218,14 +218,18 @@ function computeAt(
   const kdata = klines.slice(start, Math.max(1, index + 1));
 
   // 窗口价格域(原版 `!maxprice ? high : max(...)` 的 0 兜底语义一并保留)
-  let maxprice = 0;
-  let minprice = 0;
+  // 原版用 `!maxprice ? high : max(...)` 的 0 兜底做首次赋值;这里改为
+  // ±Infinity 初始化(超出原版的安全加固):前复权价格可为 0 甚至负数
+  // (高分红老股 qfq 早年价格),原版写法在累计值恰为 0 时会被下一根 bar
+  // 直接覆盖。正价数据下两种写法逐位等价(黄金对拍钉住)
+  let maxprice = -Infinity;
+  let minprice = Infinity;
   let hasValidBar = false;
   for (const bar of kdata) {
     if (!isValidBar(bar)) continue;
     hasValidBar = true;
-    maxprice = !maxprice ? bar.high : Math.max(maxprice, bar.high);
-    minprice = !minprice ? bar.low : Math.min(minprice, bar.low);
+    maxprice = Math.max(maxprice, bar.high);
+    minprice = Math.min(minprice, bar.low);
   }
   if (!hasValidBar) return emptyItem(date);
 
@@ -246,11 +250,17 @@ function computeAt(
       Math.min(1, ((bar.turnoverRate ?? 0) / 100) || 0)
     );
 
-    const H = Math.floor((high - minprice) / accuracy);
-    const L = Math.ceil((low - minprice) / accuracy);
+    // 档位索引夹逼到 [0, FACTOR-1](超出原版的安全加固):合法 OHLC 下
+    // H/L/gIndex 有数学边界保证(accuracy ≥ (max-min)/149)永不越界;但
+    // isValidBar 不校验 open/close ∈ [low, high],脏数据会让 avg 偏出价格域,
+    // 越界写会把 xdata 撑成稀疏巨数组 → 后续 decay 按 length 遍历直接卡死
+    const clampBucket = (i: number): number =>
+      Math.min(FACTOR - 1, Math.max(0, i));
+    const H = clampBucket(Math.floor((high - minprice) / accuracy));
+    const L = clampBucket(Math.ceil((low - minprice) / accuracy));
     // G 点:一字板时 X 为进度因子(矩形面积是三角形的 2 倍)
     const gFactor = high === low ? FACTOR - 1 : 2 / (high - low);
-    const gIndex = Math.floor((avg - minprice) / accuracy);
+    const gIndex = clampBucket(Math.floor((avg - minprice) / accuracy));
 
     // 衰减:当日换手部分从存量筹码中等比例移除
     for (let i = 0; i < xdata.length; i++) {

@@ -429,6 +429,37 @@ describe('calcChipDistribution — 选项与边界', () => {
     }
   });
 
+  it('脏数据(open 远超 high)不撑爆价格档数组:一字板 avg 偏出价格域被夹逼,输出无 NaN', () => {
+    // open=1e12 使 avg 远超窗口 max;未夹逼时 gIndex 会把 xdata 撑成稀疏
+    // 巨数组,后续 decay 按 length 遍历直接卡死
+    const dirty: ChipKlineLike[] = [
+      { date: 'd1', open: 10, high: 11, low: 9, close: 10, turnoverRate: 5 },
+      { date: 'd2', open: 1e12, high: 10, low: 10, close: 10, turnoverRate: 5 },
+      { date: 'd3', open: 10, high: 11, low: 9, close: 10, turnoverRate: 5 },
+    ];
+    const rows = calcChipDistribution(dirty, { includeHistogram: 'all' });
+    expect(rows).toHaveLength(3);
+    for (const r of rows) {
+      expect(Number.isFinite(r.avgCost!)).toBe(true);
+      expect(r.histogram!.prices).toHaveLength(150);
+      expect(r.histogram!.ratios.every((v) => Number.isFinite(v))).toBe(true);
+    }
+  });
+
+  it('零/负价格窗口(前复权场景)min/max 正确:不被原版 !maxprice 语义错误覆盖', () => {
+    // 高分红老股 qfq 早年价格可为 0 或负;high 序列 [0, -1] 在原版写法下
+    // maxprice 会被 -1 错误覆盖(!0 为 true)
+    const negative: ChipKlineLike[] = [
+      { date: 'n1', open: -1, high: 0, low: -2, close: -1, turnoverRate: 8 },
+      { date: 'n2', open: -2, high: -1, low: -3, close: -2, turnoverRate: 8 },
+    ];
+    const rows = calcChipDistribution(negative, { includeHistogram: 'last' });
+    const { prices } = rows[1].histogram!;
+    // 窗口价格域应为 [-3, 0]:最高档接近 0(而非被覆盖成 -1)
+    expect(prices[0]).toBe(-3);
+    expect(prices[prices.length - 1]).toBeCloseTo(0, 2);
+  });
+
   it('单根一字板 + 有换手:全部筹码堆在单一价格档', () => {
     const rows = calcChipDistribution(
       [{ date: 'd', open: 10, high: 10, low: 10, close: 10, turnoverRate: 50 }],
